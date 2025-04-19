@@ -839,7 +839,7 @@ Found {st.session_state.result_count} results for query: {st.session_state.last_
                 label="Download Summary Report",
                 data=report,
                 file_name=f"medsearch_summary_{datetime.now().strftime('%Y%m%d')}.md",
-                mime="text/pdf"
+                mime="application/pdf"
             )
         
         elif export_type == "Detailed Report":
@@ -889,7 +889,7 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
                 label="Download Detailed Report",
                 data=detailed_report,
                 file_name=f"medsearch_detailed_{datetime.now().strftime('%Y%m%d')}.md",
-                mime="text/pdf"
+                mime="application/pdf"
             )
         
         elif export_type == "BibTeX Citations":
