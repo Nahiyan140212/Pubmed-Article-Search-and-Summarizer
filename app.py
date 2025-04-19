@@ -17,11 +17,17 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load environment variables
-load_dotenv()
+# Handle both local development and Streamlit Cloud deployment
+if 'OPENAI_API_KEY' in os.environ:
+    # Local development with .env file
+    load_dotenv()
+    api_key = os.getenv("OPENAI_API_KEY")
+else:
+    # Streamlit Cloud with secrets
+    api_key = st.secrets["OPENAI_API_KEY"]
 
 # Initialize OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=api_key)
 
 # Custom CSS
 st.markdown("""
