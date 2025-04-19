@@ -837,7 +837,7 @@ Found {st.session_state.result_count} results for query: {st.session_state.last_
             
             st.download_button(
                 label="Download Summary Report",
-                data=report,
+                data=pdf_bytes,
                 file_name=f"medsearch_summary_{datetime.now().strftime('%Y%m%d')}.md",
                 mime="application/pdf"
             )
@@ -887,7 +887,7 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
             
             st.download_button(
                 label="Download Detailed Report",
-                data=detailed_report,
+                data=pdf_bytes,
                 file_name=f"medsearch_detailed_{datetime.now().strftime('%Y%m%d')}.md",
                 mime="application/pdf"
             )
