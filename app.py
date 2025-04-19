@@ -961,7 +961,7 @@ else:
     
     sample_searches = [
         {"title": "Recent advances in COVID-19 treatments", "keywords": "COVID-19, treatment, telehealth", "disease": "COVID-19"},
-        {"title": "Opioid Use Disorder", "keywords": "telehealth, telemedicine, remote", "Disease": "Opioid Use Disorder"},
+        {"title": "Buprenorphine usage for Opioid Use Disorder", "keywords": "telehealth, telemedicine, remote", "disease": "Opioid Use Disorder"},
         {"title": "Cancer immunotherapy outcomes", "keywords": "immunotherapy, outcomes, survival", "disease": "cancer"},
         {"title": "Hypertension control strategies", "keywords": "control, strategy, intervention", "disease": "hypertension"},
         {"title": "Mental health telehealth services", "keywords": "telehealth, telemedicine, remote", "disease": "Opioid Use Disorder"}
