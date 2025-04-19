@@ -200,7 +200,7 @@ def fetch_pubmed_count(query):
         st.error(f"Error fetching result count: {e}")
         return 0
 
-def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=True):
+def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
     """Fetch articles from PubMed based on the query and return detailed information."""
     headers = {"User-Agent": "Mozilla/5.0"}
 
@@ -371,7 +371,7 @@ def generate_mock_data():
     return mock_articles
 
 # Functions for OpenAI interaction
-def summarize_abstract(abstract, max_length=200):
+def summarize_abstract(abstract, max_length=300):
     """Use OpenAI to create a concise summary of an abstract."""
     try:
         prompt = f"Summarize the following medical abstract in about 2-3 sentences (maximum {max_length} characters):\n\n{abstract}"
@@ -410,7 +410,7 @@ Question: {question}
 Answer the question factually based only on the information provided in these articles. If the articles don't contain relevant information to answer the question, clearly state that it cannot be answered from the provided context."""
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a medical research assistant. Provide factual, accurate answers based only on the provided medical literature. Be clear about limitations when information is insufficient."},
                 {"role": "user", "content": prompt}
@@ -438,7 +438,7 @@ def extract_key_findings(articles_data):
 Format your response as bullet points, focusing on clinically relevant insights and consensus findings."""
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a medical research analyst. Identify key findings and patterns across multiple research articles."},
                 {"role": "user", "content": prompt}
@@ -466,7 +466,7 @@ def generate_research_gaps(articles_data):
 Format your response as bullet points, focusing on clinically relevant gaps that future research should address."""
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a medical research strategist. Identify important gaps in the current research landscape."},
                 {"role": "user", "content": prompt}
@@ -494,7 +494,7 @@ def generate_clinical_recommendations(articles_data):
 Format your response as bullet points with brief explanations, focusing on practical applications for clinicians. Be clear about the strength of evidence."""
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a medical research consultant. Provide evidence-based clinical recommendations based on research findings."},
                 {"role": "user", "content": prompt}
@@ -544,7 +544,7 @@ if 'user_question' not in st.session_state:
     st.session_state.user_question = ""
 
 # App Header
-st.markdown("<h1 class='main-header'>MedSearch</h1>", unsafe_allow_html=True)
+st.markdown("<h1 class='main-header'>PubMedSearch-Summarizer</h1>", unsafe_allow_html=True)
 st.markdown("<p class='sub-header'>Advanced PubMed Research Assistant</p>", unsafe_allow_html=True)
 
 # Sidebar
@@ -594,7 +594,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### About")
     st.markdown("""
-    **MedSearch** is an advanced PubMed research assistant that helps medical professionals and researchers quickly find, summarize, and analyze relevant medical literature.
+    **PubMedSearch-Summarizer** is an advanced PubMed research assistant that helps medical professionals and researchers quickly find, summarize, and analyze relevant medical literature.
     
     Powered by OpenAI and PubMed API.
     """)
@@ -887,7 +887,7 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
                 label="Download Detailed Report",
                 data=detailed_report,
                 file_name=f"medsearch_detailed_{datetime.now().strftime('%Y%m%d')}.md",
-                mime="text/markdown"
+                mime="text/pdf"
             )
         
         elif export_type == "BibTeX Citations":
@@ -952,7 +952,7 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
 
 else:
     # Display sample searches
-    st.markdown("## Welcome to MedSearch")
+    st.markdown("## Welcome to PubMedSearch")
     st.markdown("""
     Use the search form in the sidebar to find and analyze medical research articles.
     
@@ -960,11 +960,11 @@ else:
     """)
     
     sample_searches = [
-        {"title": "Recent advances in COVID-19 treatments", "keywords": "COVID-19, treatment, therapy", "disease": "COVID-19"},
-        {"title": "Diabetes management innovations", "keywords": "management, innovation, intervention", "disease": "diabetes mellitus"},
+        {"title": "Recent advances in COVID-19 treatments", "keywords": "COVID-19, treatment, telehealth", "disease": "COVID-19"},
+        {"title": "Opioid Use Disorder", "keywords": "telehealth, telemedicine, remote", "Disease": "Opioid Use Disorder"},
         {"title": "Cancer immunotherapy outcomes", "keywords": "immunotherapy, outcomes, survival", "disease": "cancer"},
         {"title": "Hypertension control strategies", "keywords": "control, strategy, intervention", "disease": "hypertension"},
-        {"title": "Mental health telehealth services", "keywords": "telehealth, telemedicine, remote", "disease": "depression"}
+        {"title": "Mental health telehealth services", "keywords": "telehealth, telemedicine, remote", "disease": "Opioid Use Disorder"}
     ]
     
     col1, col2 = st.columns(2)
@@ -1005,7 +1005,7 @@ else:
     st.markdown("""
     ### Features
     - **Advanced PubMed Search**: Search by keywords, disease, author, journal, and date range
-    - **AI-Powered Summaries**: Get concise summaries of each article
+    - **Summaries**: Get concise summaries of each article
     - **Cross-Article Analysis**: Identify key findings, research gaps, and clinical recommendations
     - **Interactive Q&A**: Ask questions about the articles and get informed answers
     - **Export Options**: Generate reports or export citations in various formats
@@ -1014,8 +1014,8 @@ else:
 # Footer
 st.markdown("""
 <div class="footer">
-    Developed for Medical Researchers • Powered by PubMed API and OpenAI GPT-4
-    <br>© 2025 MedSearch Assistant
+    Developed for Medical Researchers •
+    <br>© 2025 Nahiyan Noor
 </div>
 """, unsafe_allow_html=True)
                   
