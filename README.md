@@ -65,4 +65,40 @@ After searching, you can:
 
 ## Example Use Cases
 
-- **S
+- **Systematic Reviews**: Accelerate the initial phase of systematic reviews by quickly identifying and summarizing relevant literature
+- **Clinical Decision Support**: Find evidence-based recommendations for specific patient conditions
+- **Medical Education**: Help students and residents efficiently review literature on specific topics
+- **Research Planning**: Identify research gaps to inform study design and grant proposals
+- **Patient Case Research**: Quickly find relevant studies for challenging patient cases
+
+## Deployment to Streamlit Cloud
+
+This application can be deployed to [Streamlit Cloud](https://streamlit.io/cloud). When deploying:
+
+1. Add your OpenAI API key to Streamlit secrets instead of using the .env file
+2. No additional configuration is needed, as the code handles both local and cloud deployment environments
+
+## Requirements
+
+See [requirements.txt](requirements.txt) for the full list of dependencies.
+
+Main requirements:
+- Python 3.7+
+- Streamlit
+- OpenAI API
+- Beautiful Soup
+- Pandas
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- PubMed API for providing access to medical research articles
+- OpenAI for providing the language models used for article analysis
+- Streamlit for the interactive web application framework
