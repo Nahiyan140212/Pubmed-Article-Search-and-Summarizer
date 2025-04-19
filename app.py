@@ -8,6 +8,11 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import datetime
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+
+
 
 # Page configuration
 st.set_page_config(
@@ -147,6 +152,24 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+def generate_pdf_from_text(text):
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    y = height - 40
+
+    for line in text.split('\n'):
+        c.drawString(40, y, line)
+        y -= 15
+        if y < 40:
+            c.showPage()
+            y = height - 40
+
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
 
 # Functions for PubMed API interaction
 def build_pubmed_query(keywords, disease=None, year_range=None, author=None, journal=None, logic_operator="AND"):
@@ -834,10 +857,12 @@ Found {st.session_state.result_count} results for query: {st.session_state.last_
 **Summary:** {st.session_state.article_summaries.get(article['pmid'], 'No summary available')}
 
 """
-            
+            # Create PDF from summary report
+            pdf_summary = generate_pdf_from_text(report)
+
             st.download_button(
                 label="Download Summary Report",
-                data=pdf_bytes,
+                data=pdf_summary,
                 file_name=f"medsearch_summary_{datetime.now().strftime('%Y%m%d')}.md",
                 mime="application/pdf"
             )
@@ -882,12 +907,14 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
 **Citation:**
 {generate_citation(article)}
 
+
+
 ---
 """
-            
+            pdf_detailed = generate_pdf_from_text(detailed_report)
             st.download_button(
                 label="Download Detailed Report",
-                data=pdf_bytes,
+                data=pdf_detailed,
                 file_name=f"medsearch_detailed_{datetime.now().strftime('%Y%m%d')}.md",
                 mime="application/pdf"
             )
