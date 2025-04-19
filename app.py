@@ -704,45 +704,46 @@ if st.session_state.articles:
     # Tab 2: Analysis
     with tab2:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
-        
+    
         # Generate key findings if not already available
         if not st.session_state.key_findings:
             with st.spinner("Analyzing articles..."):
                 st.session_state.key_findings = extract_key_findings(st.session_state.articles)
-        
+    
         # Generate research gaps if not already available
         if not st.session_state.research_gaps:
             with st.spinner("Identifying research gaps..."):
                 st.session_state.research_gaps = generate_research_gaps(st.session_state.articles)
-        
+    
         # Generate clinical recommendations if not already available
         if not st.session_state.clinical_recommendations:
             with st.spinner("Generating clinical recommendations..."):
                 st.session_state.clinical_recommendations = generate_clinical_recommendations(st.session_state.articles)
-        
+    
         col1, col2 = st.columns(2)
-        
+    
         with col1:
             st.markdown("### Key Findings Across Articles")
             st.markdown(st.session_state.key_findings)
-            
+    
             st.markdown("### Research Gaps & Future Directions")
             st.markdown(st.session_state.research_gaps)
-        
+    
         with col2:
             st.markdown("### Clinical Recommendations")
             st.markdown(st.session_state.clinical_recommendations)
-            
+    
             # Publication timeline
             st.markdown("### Publication Timeline")
-            
+    
             # Extract years for timeline
             years_data = []
             for article in st.session_state.articles:
                 year_match = re.search(r'\b(19|20)\d{2}\b', article['publication_date'])
                 if year_match:
                     years_data.append(int(year_match.group()))
-                if years_data:
+    
+            if years_data:
                 # Create a DataFrame for the timeline
                 years_df = pd.DataFrame(years_data, columns=['Year'])
                 year_counts = years_df['Year'].value_counts().sort_index()
@@ -750,14 +751,14 @@ if st.session_state.articles:
                     'Year': year_counts.index,
                     'Count': year_counts.values
                 })
-                
+    
                 # Plot the timeline
                 st.bar_chart(year_counts_df.set_index('Year'))
             else:
                 st.info("Unable to extract publication years for timeline.")
-        
-        st.markdown("</div>", unsafe_allow_html=True)
     
+        st.markdown("</div>", unsafe_allow_html=True)
+
     # Tab 3: Q&A
     with tab3:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
