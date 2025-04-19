@@ -11,7 +11,7 @@ from datetime import datetime
 
 # Page configuration
 st.set_page_config(
-    page_title="MedSearch - PubMed Research Assistant",
+    page_title="PubMedSearch - PubMed Article Search and Summarizer",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -549,7 +549,7 @@ st.markdown("<p class='sub-header'>Advanced PubMed Research Assistant</p>", unsa
 
 # Sidebar
 with st.sidebar:
-    st.image("https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.nccih.nih.gov%2Fhealth%2Fhow-to-find-information-about-complementary-health-approaches-on-pubmed&psig=AOvVaw1IpdO3ffryRBCO2Ba61EHH&ust=1745132961781000&source=images&cd=vfe&opi=89978449&ved=0CBQQjRxqFwoTCOC1p4fF44wDFQAAAAAdAAAAABAE", width=100)
+    st.image("logo.png", width=100)
     st.markdown("## Search Settings")
     
     with st.form(key='search_form'):
