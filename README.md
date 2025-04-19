@@ -1,2 +1,68 @@
-# Pubmed-Article-Search-and-Summarizer
-PubMed Article Search &amp; Summarizer is a lightweight Python utility that lets you type a research query, instantly retrieves the most relevant PubMed papers, and distills each abstract into a clear, bite‑sized summary with GPT‑4. It surfaces key metadata—title, authors, publication date, and link—so you can scan the latest evidence in seconds. 
+# MedSearch - PubMed Research Assistant
+
+![MedSearch Logo](https://i.ibb.co/GRpZBYB/dna-icon.png)
+
+## Overview
+
+MedSearch is an advanced PubMed research assistant that helps medical professionals and researchers quickly find, summarize, and analyze relevant medical literature. Built with Streamlit and powered by OpenAI's language models, MedSearch streamlines the literature review process by providing AI-enhanced article summaries, cross-article analysis, and interactive question answering capabilities.
+
+## Features
+
+- **Advanced PubMed Search**: Search by keywords, disease, author, journal, and date range
+- **AI-Powered Summaries**: Get concise summaries of each research article abstract
+- **Cross-Article Analysis**: Automatically identify key findings, research gaps, and clinical recommendations
+- **Interactive Q&A**: Ask questions about the retrieved articles and get informed answers
+- **Export Options**: Generate reports or export citations in various formats (Markdown, BibTeX, CSV)
+- **Publication Timeline**: Visualize the temporal distribution of research articles
+- **Search History**: Easily access and reuse previous search queries
+
+## Installation
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/yourusername/medsearch.git
+   cd medsearch
+   ```
+
+2. Install the required packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Create a `.env` file in the project root directory with your OpenAI API key:
+   ```
+   OPENAI_API_KEY=your_openai_api_key_here
+   ```
+
+## Usage
+
+Run the Streamlit app:
+```bash
+streamlit run app.py
+```
+
+Then open your browser and go to `http://localhost:8501` to use the application.
+
+### Search PubMed
+
+1. Enter keywords and/or a disease/condition in the sidebar
+2. Optionally, configure advanced filters:
+   - Search logic (AND/OR)
+   - Publication date range
+   - Author name
+   - Journal name
+   - Maximum results to retrieve
+3. Click "Search PubMed" to submit your query
+
+### Explore Results
+
+After searching, you can:
+- View article details including abstracts and AI-generated summaries
+- See key findings across all articles
+- Identify research gaps and clinical recommendations
+- Ask questions about the articles
+- Export search results in various formats
+
+## Example Use Cases
+
+- **S
