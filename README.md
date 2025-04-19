@@ -21,7 +21,7 @@ MedSearch is an advanced PubMed research assistant that helps medical profession
 1. Clone this repository:
    ```bash
    git clone https://github.com/yourusername/medsearch.git
-   cd medsearch
+   cd pubmedsearch
    ```
 
 2. Install the required packages:
@@ -73,7 +73,7 @@ After searching, you can:
 
 ## Deployment to Streamlit Cloud
 
-This application can be deployed to [Streamlit Cloud](https://streamlit.io/cloud). When deploying:
+This application can be deployed to [Streamlit Cloud]([https://streamlit.io/cloud](https://noor-pubmed-summarizer.streamlit.app/)). When deploying:
 
 1. Add your OpenAI API key to Streamlit secrets instead of using the .env file
 2. No additional configuration is needed, as the code handles both local and cloud deployment environments
