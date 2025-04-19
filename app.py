@@ -377,7 +377,7 @@ def summarize_abstract(abstract, max_length=300):
         prompt = f"Summarize the following medical abstract in about 2-3 sentences (maximum {max_length} characters):\n\n{abstract}"
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a medical research summarizer. Create concise, accurate summaries that capture the key findings and implications."},
                 {"role": "user", "content": prompt}
@@ -597,6 +597,8 @@ with st.sidebar:
     **PubMedSearch-Summarizer** is an advanced PubMed research assistant that helps medical professionals and researchers quickly find, summarize, and analyze relevant medical literature.
     
     Powered by OpenAI and PubMed API.
+
+    contact: nahiyan.cuet@gmail.com
     """)
 
 # Handle search
@@ -837,7 +839,7 @@ Found {st.session_state.result_count} results for query: {st.session_state.last_
                 label="Download Summary Report",
                 data=report,
                 file_name=f"medsearch_summary_{datetime.now().strftime('%Y%m%d')}.md",
-                mime="text/markdown"
+                mime="text/pdf"
             )
         
         elif export_type == "Detailed Report":
