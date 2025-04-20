@@ -1,6 +1,6 @@
 # MedSearch - PubMed Research Assistant
 
-![MedSearch Logo](https://i.ibb.co/GRpZBYB/dna-icon.png)
+![MedSearch Logo](logo.png)
 
 ## Overview
 
