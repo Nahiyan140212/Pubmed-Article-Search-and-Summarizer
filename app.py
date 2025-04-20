@@ -11,6 +11,9 @@ from datetime import datetime
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
 
 
 
@@ -155,18 +158,26 @@ st.markdown("""
 
 def generate_pdf_from_text(text):
     buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-    width, height = letter
-    y = height - 40
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=inch, leftMargin=inch, topMargin=inch, bottomMargin=inch)
+    styles = getSampleStyleSheet()
+    story = []
 
-    for line in text.split('\n'):
-        c.drawString(40, y, line)
-        y -= 15
-        if y < 40:
-            c.showPage()
-            y = height - 40
+    # Split text into paragraphs
+    paragraphs = text.split('\n\n')
+    for para in paragraphs:
+        # Clean and format paragraph
+        para = para.strip().replace('\n', ' ')
+        if para.startswith('# '):
+            story.append(Paragraph(para[2:], styles['Heading1']))
+        elif para.startswith('## '):
+            story.append(Paragraph(para[3:], styles['Heading2']))
+        elif para.startswith('### '):
+            story.append(Paragraph(para[4:], styles['Heading3']))
+        else:
+            story.append(Paragraph(para, styles['BodyText']))
+        story.append(Spacer(1, 0.2 * inch))
 
-    c.save()
+    doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
 
@@ -820,21 +831,21 @@ if st.session_state.articles:
         st.markdown("</div>", unsafe_allow_html=True)
     
     # Tab 4: Export
-    with tab4:
-        st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
-        st.markdown("### Export Options")
-        
-        export_type = st.radio(
-            "Select export format:",
-            ["Summary Report", "Detailed Report", "BibTeX Citations", "CSV Data"]
-        )
-        
-        if export_type == "Summary Report":
-            report = f"""# Literature Review Summary
+with tab4:
+    st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
+    st.markdown("### Export Options")
+    
+    export_type = st.radio(
+        "Select export format:",
+        ["Summary Report", "Detailed Report", "BibTeX Citations", "CSV Data"]
+    )
+    
+    if export_type == "Summary Report":
+        report = f"""# Literature Review Summary
 Generated on {datetime.now().strftime('%B %d, %Y')}
 
 ## Overview
-Found {st.session_state.result_count} results for query: {st.session_state.last_query.replace('"', '\\"')}
+Found {st.session_state.result_count:,} results for query: {st.session_state.last_query.replace('"', '\\"')}
 
 ## Key Findings
 {st.session_state.key_findings}
@@ -847,8 +858,8 @@ Found {st.session_state.result_count} results for query: {st.session_state.last_
 
 ## Articles Reviewed
 """
-            for i, article in enumerate(st.session_state.articles, 1):
-                report += f"""
+        for i, article in enumerate(st.session_state.articles, 1):
+            report += f"""
 ### {i}. {article['title']}
 **Authors:** {', '.join(article['authors'])}
 **Journal:** {article['journal']}, {article['publication_date']}
@@ -857,18 +868,18 @@ Found {st.session_state.result_count} results for query: {st.session_state.last_
 **Summary:** {st.session_state.article_summaries.get(article['pmid'], 'No summary available')}
 
 """
-            # Create PDF from summary report
-            pdf_summary = generate_pdf_from_text(report)
+        # Generate PDF
+        pdf_summary = generate_pdf_from_text(report)
 
-            st.download_button(
-                label="Download Summary Report",
-                data=pdf_summary,
-                file_name=f"medsearch_summary_{datetime.now().strftime('%Y%m%d')}.md",
-                mime="application/pdf"
-            )
-        
-        elif export_type == "Detailed Report":
-            detailed_report = f"""# Comprehensive Literature Review
+        st.download_button(
+            label="Download Summary Report",
+            data=pdf_summary,
+            file_name=f"medsearch_summary_{datetime.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf"
+        )
+    
+    elif export_type == "Detailed Report":
+        detailed_report = f"""# Comprehensive Literature Review
 Generated on {datetime.now().strftime('%B %d, %Y')}
 
 ## Search Details
@@ -888,8 +899,8 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
 
 ## Detailed Article Summaries
 """
-            for i, article in enumerate(st.session_state.articles, 1):
-                detailed_report += f"""
+        for i, article in enumerate(st.session_state.articles, 1):
+            detailed_report += f"""
 ### {i}. {article['title']}
 **Authors:** {', '.join(article['authors'])}
 **Journal:** {article['journal']}, {article['publication_date']}
@@ -907,30 +918,29 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
 **Citation:**
 {generate_citation(article)}
 
-
-
 ---
 """
-            pdf_detailed = generate_pdf_from_text(detailed_report)
-            st.download_button(
-                label="Download Detailed Report",
-                data=pdf_detailed,
-                file_name=f"medsearch_detailed_{datetime.now().strftime('%Y%m%d')}.md",
-                mime="application/pdf"
-            )
-        
-        elif export_type == "BibTeX Citations":
-            bibtex = ""
-            for article in st.session_state.articles:
-                # Extract year
-                year_match = re.search(r'\b(19|20)\d{2}\b', article['publication_date'])
-                year = year_match.group() if year_match else "n.d."
-                
-                # Create citation key
-                first_author_last = article['authors'][0].split()[-1] if article['authors'] else "Unknown"
-                citation_key = f"{first_author_last.lower()}{year}"
-                
-                bibtex += f"""@article{{{citation_key},
+        # Generate PDF
+        pdf_detailed = generate_pdf_from_text(detailed_report)
+        st.download_button(
+            label="Download Detailed Report",
+            data=pdf_detailed,
+            file_name=f"medsearch_detailed_{datetime.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf"
+        )
+    
+    elif export_type == "BibTeX Citations":
+        bibtex = ""
+        for article in st.session_state.articles:
+            # Extract year
+            year_match = re.search(r'\b(19|20)\d{2}\b', article['publication_date'])
+            year = year_match.group() if year_match else "n.d."
+            
+            # Create citation key
+            first_author_last = article['authors'][0].split()[-1] if article['authors'] else "Unknown"
+            citation_key = f"{first_author_last.lower()}{year}"
+            
+            bibtex += f"""@article{{{citation_key},
   title = {{{article['title']}}},
   author = {{{' and '.join(article['authors'])}}},
   journal = {{{article['journal']}}},
@@ -940,45 +950,44 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
 }}
 
 """
-            
-            st.download_button(
-                label="Download BibTeX Citations",
-                data=bibtex,
-                file_name=f"medsearch_citations_{datetime.now().strftime('%Y%m%d')}.bib",
-                mime="application/x-bibtex"
-            )
         
-        elif export_type == "CSV Data":
-            # Prepare data for CSV
-            csv_data = []
-            for article in st.session_state.articles:
-                csv_data.append({
-                    "Title": article['title'],
-                    "Authors": '; '.join(article['authors']),
-                    "Journal": article['journal'],
-                    "Publication Date": article['publication_date'],
-                    "Abstract": article['abstract'],
-                    "Keywords": '; '.join(article['keywords']) if article['keywords'] else '',
-                    "URL": article['article_url'],
-                    "PMID": article['pmid'],
-                    "Summary": st.session_state.article_summaries.get(article['pmid'], 'No summary available')
-                })
-            
-            # Convert to DataFrame
-            df = pd.DataFrame(csv_data)
-            
-            # Convert to CSV
-            csv = df.to_csv(index=False)
-            
-            st.download_button(
-                label="Download CSV Data",
-                data=csv,
-                file_name=f"medsearch_data_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv"
-            )
+        st.download_button(
+            label="Download BibTeX Citations",
+            data=bibtex,
+            file_name=f"medsearch_citations_{datetime.now().strftime('%Y%m%d')}.bib",
+            mime="application/x-bibtex"
+        )
+    
+    elif export_type == "CSV Data":
+        # Prepare data for CSV
+        csv_data = []
+        for article in st.session_state.articles:
+            csv_data.append({
+                "Title": article['title'],
+                "Authors": '; '.join(article['authors']),
+                "Journal": article['journal'],
+                "Publication Date": article['publication_date'],
+                "Abstract": article['abstract'],
+                "Keywords": '; '.join(article['keywords']) if article['keywords'] else '',
+                "URL": article['article_url'],
+                "PMID": article['pmid'],
+                "Summary": st.session_state.article_summaries.get(article['pmid'], 'No summary available')
+            })
         
-        st.markdown("</div>", unsafe_allow_html=True)
-
+        # Convert to DataFrame
+        df = pd.DataFrame(csv_data)
+        
+        # Convert to CSV
+        csv = df.to_csv(index=False)
+        
+        st.download_button(
+            label="Download CSV Data",
+            data=csv,
+            file_name=f"medsearch_data_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+    
+    st.markdown("</div>", unsafe_allow_html=True)
 else:
     # Display sample searches
     st.markdown("## Welcome to PubMedSearch")
