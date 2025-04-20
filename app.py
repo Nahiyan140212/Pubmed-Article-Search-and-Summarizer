@@ -988,7 +988,7 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
         )
     
     st.markdown("</div>", unsafe_allow_html=True)
-else:
+    else:
     # Display sample searches
     st.markdown("## Welcome to PubMedSearch")
     st.markdown("""
