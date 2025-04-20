@@ -10,3 +10,4 @@ reportlab
 fpdf
 weasyprint
 jinja2
+reportlab
