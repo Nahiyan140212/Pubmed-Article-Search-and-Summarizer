@@ -545,9 +545,7 @@ with st.sidebar:
     st.markdown("## Search Settings")
     
     with st.form(key='search_form'):
-        st.markdown("### Basicータ
-
-System: Search")
+        st.markdown("### Basic System: Search")
         keywords = st.text_input("Keywords (comma separated)", placeholder="e.g. treatment, therapy, intervention")
         disease = st.text_input("Disease/Condition", placeholder="e.g. diabetes, hypertension")
         
