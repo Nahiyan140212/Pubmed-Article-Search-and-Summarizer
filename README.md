@@ -1,4 +1,4 @@
-# MedSearch - PubMed Research Assistant
+# PubMedSearch - PubMed Research Assistant
 
 
 <br><img src="logo.png" alt="MedSearch Logo" width="150">
