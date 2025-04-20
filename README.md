@@ -1,7 +1,7 @@
 # MedSearch - PubMed Research Assistant
 
 
-html<br><img src="logo.png" alt="MedSearch Logo" width="10">
+html<br><img src="logo.png" alt="MedSearch Logo" width="100">
 
 ## Overview
 
