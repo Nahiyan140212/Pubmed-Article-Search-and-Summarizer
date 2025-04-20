@@ -1,6 +1,6 @@
 # MedSearch - PubMed Research Assistant
 
-md<br>![PubMedSearch Logo](logo.png){ width=120px }
+<br>![PubMedSearch Logo](logo.png){ width=20px }
 ## Overview
 
 MedSearch is an advanced PubMed research assistant that helps medical professionals and researchers quickly find, summarize, and analyze relevant medical literature. Built with Streamlit and powered by OpenAI's language models, MedSearch streamlines the literature review process by providing AI-enhanced article summaries, cross-article analysis, and interactive question answering capabilities.
