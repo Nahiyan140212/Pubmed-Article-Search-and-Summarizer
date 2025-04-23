@@ -8,11 +8,6 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import datetime
-from io import BytesIO
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
 
 # Page configuration
 st.set_page_config(
@@ -153,35 +148,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def generate_pdf_from_text(text):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=inch, leftMargin=inch, topMargin=inch, bottomMargin=inch)
-    styles = getSampleStyleSheet()
-    story = []
-
-    # Split text into paragraphs
-    paragraphs = text.split('\n\n')
-    for para in paragraphs:
-        # Clean and format paragraph
-        para = para.strip().replace('\n', ' ')
-        if para.startswith('# '):
-            story.append(Paragraph(para[2:], styles['Heading1']))
-        elif para.startswith('## '):
-            story.append(Paragraph(para[3:], styles['Heading2']))
-        elif para.startswith('### '):
-            story.append(Paragraph(para[4:], styles['Heading3']))
-        else:
-            story.append(Paragraph(para, styles['BodyText']))
-        story.append(Spacer(1, 0.2 * inch))
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer.getvalue()
-
 # Functions for PubMed API interaction
 def build_pubmed_query(keywords, disease=None, year_range=None, author=None, journal=None, logic_operator="AND"):
     """Build a query string for PubMed using various filters."""
+    
+    # Process keywords
     keywords_str = " ".join(f'"{kw}"' for kw in keywords if kw.strip())
+    
+    # Start building query components
     query_parts = []
     
     if keywords_str:
@@ -190,17 +164,22 @@ def build_pubmed_query(keywords, disease=None, year_range=None, author=None, jou
     if disease and disease.strip():
         query_parts.append(f'("{disease}"[MeSH Terms] OR "{disease}"[All Fields])')
     
+    # Add year range if provided
     if year_range and len(year_range) == 2:
         start_year, end_year = year_range
         query_parts.append(f"({start_year}[PDAT]:{end_year}[PDAT])")
     
+    # Add author if provided
     if author and author.strip():
         query_parts.append(f'"{author}"[Author]')
     
+    # Add journal if provided
     if journal and journal.strip():
         query_parts.append(f'"{journal}"[Journal]')
     
+    # Join all parts with the selected operator
     final_query = f" {logic_operator} ".join(query_parts)
+    
     return final_query
 
 def fetch_pubmed_count(query):
@@ -224,6 +203,8 @@ def fetch_pubmed_count(query):
 def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
     """Fetch articles from PubMed based on the query and return detailed information."""
     headers = {"User-Agent": "Mozilla/5.0"}
+
+    # Step 1: Search PubMed
     search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     search_params = {
         "db": "pubmed",
@@ -244,6 +225,7 @@ def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
 
             ids = ",".join(id_list)
 
+        # Step 2: Fetch article summaries
         with st.spinner("Retrieving article details..."):
             fetch_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
             fetch_params = {
@@ -264,9 +246,13 @@ def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
                 journal_tag = article.find("journal")
                 keywords_tag = article.find_all("keyword")
 
+                # Title
                 title = title_tag.get_text(strip=True) if title_tag else "No title"
+
+                # Abstract
                 abstract = abstract_tag.get_text(separator=" ", strip=True) if abstract_tag else "No abstract available"
-                
+
+                # Authors
                 authors = []
                 for author in author_tags:
                     last = author.find("lastname")
@@ -277,19 +263,23 @@ def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
                         authors.append(last.get_text())
                 authors = authors if authors else ["No authors listed"]
 
+                # Journal
                 journal_name = "Unknown Journal"
                 if journal_tag:
                     journal_title = journal_tag.find("title")
                     if journal_title:
                         journal_name = journal_title.get_text(strip=True)
 
+                # Keywords
                 keywords = [kw.get_text(strip=True) for kw in keywords_tag] if keywords_tag else []
 
+                # Publication Date
                 pub_date = "No date"
                 if date_tag:
                     year = date_tag.find("year")
                     month = date_tag.find("month")
                     day = date_tag.find("day")
+                    
                     if year and month and day:
                         pub_date = f"{month.get_text()} {day.get_text()}, {year.get_text()}"
                     elif year and month:
@@ -297,6 +287,7 @@ def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
                     elif year:
                         pub_date = year.get_text()
 
+                # PubMed Article URL
                 url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
 
                 articles_info.append({
@@ -317,11 +308,13 @@ def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
         if use_mock_if_empty:
             st.warning("An error occurred. Showing simulated data.")
             return generate_mock_data()
-        return []
+        else:
+            return []
 
 def generate_mock_data():
     """Generate mock data for demonstration purposes."""
     current_year = datetime.now().year
+    
     mock_articles = [
         {
             "title": "Recent Advances in Treatment Approaches for Autoimmune Disorders",
@@ -374,6 +367,7 @@ def generate_mock_data():
             "pmid": "sample5"
         }
     ]
+    
     return mock_articles
 
 # Functions for OpenAI interaction
@@ -381,6 +375,7 @@ def summarize_abstract(abstract, max_length=300):
     """Use OpenAI to create a concise summary of an abstract."""
     try:
         prompt = f"Summarize the following medical abstract in about 2-3 sentences (maximum {max_length} characters):\n\n{abstract}"
+
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -388,6 +383,7 @@ def summarize_abstract(abstract, max_length=300):
                 {"role": "user", "content": prompt}
             ]
         )
+
         return response.choices[0].message.content.strip()
     except Exception as e:
         st.error(f"Error generating summary: {e}")
@@ -396,6 +392,7 @@ def summarize_abstract(abstract, max_length=300):
 def answer_question(question, articles_data):
     """Answer a question based on the articles data using OpenAI."""
     try:
+        # Prepare context from articles
         context = ""
         for i, article in enumerate(articles_data, 1):
             context += f"Article {i}: {article['title']}\n"
@@ -411,6 +408,7 @@ Context articles:
 Question: {question}
 
 Answer the question factually based only on the information provided in these articles. If the articles don't contain relevant information to answer the question, clearly state that it cannot be answered from the provided context."""
+
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -418,6 +416,7 @@ Answer the question factually based only on the information provided in these ar
                 {"role": "user", "content": prompt}
             ]
         )
+
         return response.choices[0].message.content.strip()
     except Exception as e:
         st.error(f"Error answering question: {e}")
@@ -426,6 +425,7 @@ Answer the question factually based only on the information provided in these ar
 def extract_key_findings(articles_data):
     """Extract key findings from multiple articles using OpenAI."""
     try:
+        # Prepare context from articles
         context = ""
         for i, article in enumerate(articles_data, 1):
             context += f"Article {i}: {article['title']}\n"
@@ -436,6 +436,7 @@ def extract_key_findings(articles_data):
 {context}
 
 Format your response as bullet points, focusing on clinically relevant insights and consensus findings."""
+
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -443,6 +444,7 @@ Format your response as bullet points, focusing on clinically relevant insights 
                 {"role": "user", "content": prompt}
             ]
         )
+
         return response.choices[0].message.content.strip()
     except Exception as e:
         st.error(f"Error extracting key findings: {e}")
@@ -451,6 +453,7 @@ Format your response as bullet points, focusing on clinically relevant insights 
 def generate_research_gaps(articles_data):
     """Identify research gaps based on the articles using OpenAI."""
     try:
+        # Prepare context from articles
         context = ""
         for i, article in enumerate(articles_data, 1):
             context += f"Article {i}: {article['title']}\n"
@@ -461,6 +464,7 @@ def generate_research_gaps(articles_data):
 {context}
 
 Format your response as bullet points, focusing on clinically relevant gaps that future research should address."""
+
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -468,6 +472,7 @@ Format your response as bullet points, focusing on clinically relevant gaps that
                 {"role": "user", "content": prompt}
             ]
         )
+
         return response.choices[0].message.content.strip()
     except Exception as e:
         st.error(f"Error identifying research gaps: {e}")
@@ -476,6 +481,7 @@ Format your response as bullet points, focusing on clinically relevant gaps that
 def generate_clinical_recommendations(articles_data):
     """Generate clinical practice recommendations based on the articles using OpenAI."""
     try:
+        # Prepare context from articles
         context = ""
         for i, article in enumerate(articles_data, 1):
             context += f"Article {i}: {article['title']}\n"
@@ -486,6 +492,7 @@ def generate_clinical_recommendations(articles_data):
 {context}
 
 Format your response as bullet points with brief explanations, focusing on practical applications for clinicians. Be clear about the strength of evidence."""
+
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -493,6 +500,7 @@ Format your response as bullet points with brief explanations, focusing on pract
                 {"role": "user", "content": prompt}
             ]
         )
+
         return response.choices[0].message.content.strip()
     except Exception as e:
         st.error(f"Error generating clinical recommendations: {e}")
@@ -545,10 +553,12 @@ with st.sidebar:
     st.markdown("## Search Settings")
     
     with st.form(key='search_form'):
-        st.markdown("### Basic System: Search")
+        # Main search parameters
+        st.markdown("### Basic Search")
         keywords = st.text_input("Keywords (comma separated)", placeholder="e.g. treatment, therapy, intervention")
         disease = st.text_input("Disease/Condition", placeholder="e.g. diabetes, hypertension")
         
+        # Advanced search options
         st.markdown("### Advanced Filters")
         logic_operator = st.selectbox("Search Logic", ["AND", "OR"])
         
@@ -565,6 +575,7 @@ with st.sidebar:
         
         search_button = st.form_submit_button("Search PubMed")
     
+    # Search history section
     if st.session_state.search_history:
         st.markdown("### Recent Searches")
         for i, history_item in enumerate(st.session_state.search_history[-5:]):
@@ -572,7 +583,8 @@ with st.sidebar:
                 st.session_state.last_query = history_item
                 with st.spinner("Searching PubMed..."):
                     st.session_state.result_count = fetch_pubmed_count(history_item)
-                    st.session_state.articles = fetch_publications(history_item, max_results)
+                    st.session_state.articles = fetch_pubmed_articles(history_item, max_results)
+                    # Clear previous summaries
                     st.session_state.article_summaries = {}
                     st.session_state.key_findings = ""
                     st.session_state.research_gaps = ""
@@ -585,23 +597,30 @@ with st.sidebar:
     **PubMedSearch-Summarizer** is an advanced PubMed research assistant that helps medical professionals and researchers quickly find, summarize, and analyze relevant medical literature.
     
     Powered by OpenAI and PubMed API.
+
     contact: nahiyan.cuet@gmail.com
     """)
 
 # Handle search
 if search_button:
+    # Process keywords
     keyword_list = [k.strip() for k in keywords.split(',') if k.strip()]
+    
+    # Build query
     year_range = [start_year, end_year] if start_year and end_year else None
     query = build_pubmed_query(keyword_list, disease, year_range, author, journal, logic_operator)
     
     if query:
         st.session_state.last_query = query
+        
+        # Add to search history
         if query not in st.session_state.search_history:
             st.session_state.search_history.append(query)
         
         with st.spinner("Searching PubMed..."):
             st.session_state.result_count = fetch_pubmed_count(query)
             st.session_state.articles = fetch_pubmed_articles(query, max_results)
+            # Clear previous summaries
             st.session_state.article_summaries = {}
             st.session_state.key_findings = ""
             st.session_state.research_gaps = ""
@@ -611,6 +630,7 @@ if search_button:
 
 # Main content area
 if st.session_state.articles:
+    # Results metrics bar
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown(f"""
@@ -640,89 +660,126 @@ if st.session_state.articles:
         </div>
         """, unsafe_allow_html=True)
     
+    # Create tabs
     tab1, tab2, tab3, tab4 = st.tabs(["Articles", "Analysis", "Q&A", "Export"])
     
+    # Tab 1: Articles
     with tab1:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
+        
+        # Display the results
         for i, article in enumerate(st.session_state.articles):
             with st.expander(f"{i+1}. {article['title']}", expanded=True):
                 col1, col2 = st.columns([3, 1])
+                
                 with col1:
                     st.markdown(f"**Journal:** {article['journal']}")
                     st.markdown(f"**Published:** {article['publication_date']}")
                     st.markdown(f"**Authors:** {', '.join(article['authors'])}")
+                    
                     st.markdown("### Abstract")
                     st.markdown(article['abstract'])
+                    
+                    # Get or generate summary
                     if article['pmid'] not in st.session_state.article_summaries:
                         with st.spinner("Generating summary..."):
                             summary = summarize_abstract(article['abstract'])
                             st.session_state.article_summaries[article['pmid']] = summary
+                    
                     st.markdown("### Summary")
                     st.markdown(f"<div class='article-summary'>{st.session_state.article_summaries[article['pmid']]}</div>", unsafe_allow_html=True)
+                
                 with col2:
                     st.markdown("### Quick Links")
                     st.markdown(f"[View on PubMed]({article['article_url']})")
+                    
                     if article['keywords']:
                         st.markdown("### Keywords")
                         for kw in article['keywords']:
                             st.markdown(f"<span class='badge'>{kw}</span>", unsafe_allow_html=True)
+                    
                     st.markdown("### Citation")
                     st.code(generate_citation(article), language=None)
+        
         st.markdown("</div>", unsafe_allow_html=True)
     
+    # Tab 2: Analysis
     with tab2:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
+    
+        # Generate key findings if not already available
         if not st.session_state.key_findings:
             with st.spinner("Analyzing articles..."):
                 st.session_state.key_findings = extract_key_findings(st.session_state.articles)
+    
+        # Generate research gaps if not already available
         if not st.session_state.research_gaps:
             with st.spinner("Identifying research gaps..."):
                 st.session_state.research_gaps = generate_research_gaps(st.session_state.articles)
+    
+        # Generate clinical recommendations if not already available
         if not st.session_state.clinical_recommendations:
             with st.spinner("Generating clinical recommendations..."):
                 st.session_state.clinical_recommendations = generate_clinical_recommendations(st.session_state.articles)
-        
+    
         col1, col2 = st.columns(2)
+    
         with col1:
             st.markdown("### Key Findings Across Articles")
             st.markdown(st.session_state.key_findings)
+    
             st.markdown("### Research Gaps & Future Directions")
             st.markdown(st.session_state.research_gaps)
+    
         with col2:
             st.markdown("### Clinical Recommendations")
             st.markdown(st.session_state.clinical_recommendations)
+    
+            # Publication timeline
             st.markdown("### Publication Timeline")
+    
+            # Extract years for timeline
             years_data = []
             for article in st.session_state.articles:
                 year_match = re.search(r'\b(19|20)\d{2}\b', article['publication_date'])
                 if year_match:
                     years_data.append(int(year_match.group()))
+    
             if years_data:
+                # Create a DataFrame for the timeline
                 years_df = pd.DataFrame(years_data, columns=['Year'])
                 year_counts = years_df['Year'].value_counts().sort_index()
                 year_counts_df = pd.DataFrame({
                     'Year': year_counts.index,
                     'Count': year_counts.values
                 })
+    
+                # Plot the timeline
                 st.bar_chart(year_counts_df.set_index('Year'))
             else:
                 st.info("Unable to extract publication years for timeline.")
+    
         st.markdown("</div>", unsafe_allow_html=True)
 
+    # Tab 3: Q&A
     with tab3:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
         st.markdown("### Ask Questions About These Articles")
         st.markdown("Ask any question related to the findings, methods, or implications of these articles.")
+        
         user_question = st.text_input("Your question:", key="question_input")
+        
         if user_question and user_question != st.session_state.user_question:
             st.session_state.user_question = user_question
             with st.spinner("Analyzing question..."):
                 answer = answer_question(user_question, st.session_state.articles)
                 st.markdown(f"<div class='qa-box'><strong>Q: {user_question}</strong><br><br>{answer}</div>", unsafe_allow_html=True)
         elif st.session_state.user_question:
+            # Display previous answer
             answer = answer_question(st.session_state.user_question, st.session_state.articles)
             st.markdown(f"<div class='qa-box'><strong>Q: {st.session_state.user_question}</strong><br><br>{answer}</div>", unsafe_allow_html=True)
         
+        # Sample questions
         st.markdown("### Sample Questions")
         sample_questions = [
             "What are the main treatment approaches discussed in these articles?",
@@ -731,25 +788,30 @@ if st.session_state.articles:
             "How do these findings impact clinical practice?",
             "What patient populations were included in these studies?"
         ]
+        
         for sample in sample_questions:
             if st.button(sample, key=f"sample_{hash(sample)}"):
                 st.session_state.user_question = sample
                 st.rerun()
+        
         st.markdown("</div>", unsafe_allow_html=True)
     
+    # Tab 4: Export
     with tab4:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
         st.markdown("### Export Options")
+        
         export_type = st.radio(
             "Select export format:",
             ["Summary Report", "Detailed Report", "BibTeX Citations", "CSV Data"]
         )
+        
         if export_type == "Summary Report":
             report = f"""# Literature Review Summary
 Generated on {datetime.now().strftime('%B %d, %Y')}
 
 ## Overview
-Found {st.session_state.result_count:,} results for query: {st.session_state.last_query.replace('"', '\\"')}
+Found {st.session_state.result_count} results for query: {st.session_state.last_query.replace('"', '\\"')}
 
 ## Key Findings
 {st.session_state.key_findings}
@@ -772,12 +834,12 @@ Found {st.session_state.result_count:,} results for query: {st.session_state.las
 **Summary:** {st.session_state.article_summaries.get(article['pmid'], 'No summary available')}
 
 """
-            pdf_summary = generate_pdf_from_text(report)
+            
             st.download_button(
                 label="Download Summary Report",
-                data=pdf_summary,
-                file_name=f"medsearch_summary_{datetime.now().strftime('%Y%m%d')}.pdf",
-                mime="application/pdf"
+                data=report,
+                file_name=f"medsearch_summary_{datetime.now().strftime('%Y%m%d')}.md",
+                mime="text/pdf"
             )
         
         elif export_type == "Detailed Report":
@@ -822,21 +884,25 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
 
 ---
 """
-            pdf_detailed = generate_pdf_from_text(detailed_report)
+            
             st.download_button(
                 label="Download Detailed Report",
-                data=pdf_detailed,
-                file_name=f"medsearch_detailed_{datetime.now().strftime('%Y%m%d')}.pdf",
-                mime="application/pdf"
+                data=detailed_report,
+                file_name=f"medsearch_detailed_{datetime.now().strftime('%Y%m%d')}.md",
+                mime="text/pdf"
             )
         
         elif export_type == "BibTeX Citations":
             bibtex = ""
             for article in st.session_state.articles:
+                # Extract year
                 year_match = re.search(r'\b(19|20)\d{2}\b', article['publication_date'])
                 year = year_match.group() if year_match else "n.d."
+                
+                # Create citation key
                 first_author_last = article['authors'][0].split()[-1] if article['authors'] else "Unknown"
                 citation_key = f"{first_author_last.lower()}{year}"
+                
                 bibtex += f"""@article{{{citation_key},
   title = {{{article['title']}}},
   author = {{{' and '.join(article['authors'])}}},
@@ -847,6 +913,7 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
 }}
 
 """
+            
             st.download_button(
                 label="Download BibTeX Citations",
                 data=bibtex,
@@ -855,6 +922,7 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
             )
         
         elif export_type == "CSV Data":
+            # Prepare data for CSV
             csv_data = []
             for article in st.session_state.articles:
                 csv_data.append({
@@ -868,17 +936,24 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
                     "PMID": article['pmid'],
                     "Summary": st.session_state.article_summaries.get(article['pmid'], 'No summary available')
                 })
+            
+            # Convert to DataFrame
             df = pd.DataFrame(csv_data)
+            
+            # Convert to CSV
             csv = df.to_csv(index=False)
+            
             st.download_button(
                 label="Download CSV Data",
                 data=csv,
                 file_name=f"medsearch_data_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv"
             )
+        
         st.markdown("</div>", unsafe_allow_html=True)
 
 else:
+    # Display sample searches
     st.markdown("## Welcome to PubMedSearch")
     st.markdown("""
     Use the search form in the sidebar to find and analyze medical research articles.
@@ -891,10 +966,11 @@ else:
         {"title": "Buprenorphine usage for Opioid Use Disorder", "keywords": "telehealth, telemedicine, remote", "disease": "Opioid Use Disorder"},
         {"title": "Cancer immunotherapy outcomes", "keywords": "immunotherapy, outcomes, survival", "disease": "cancer"},
         {"title": "Hypertension control strategies", "keywords": "control, strategy, intervention", "disease": "hypertension"},
-        {"title": "Mental health telehealth services", "keywords": "telehealth, telemedicine, remote", "disease": "Mental Health"}
+        {"title": "Mental health telehealth services", "keywords": "telehealth, telemedicine, remote", "disease": "Opioid Use Disorder"}
     ]
     
     col1, col2 = st.columns(2)
+    
     for i, sample in enumerate(sample_searches):
         col = col1 if i % 2 == 0 else col2
         with col:
@@ -902,20 +978,29 @@ else:
             st.markdown(f"#### {sample['title']}")
             st.markdown(f"Keywords: {sample['keywords']}")
             st.markdown(f"Disease: {sample['disease']}")
+            
             if st.button("Try This Search", key=f"sample_btn_{i}"):
+                # Process sample search
                 keyword_list = [k.strip() for k in sample['keywords'].split(',') if k.strip()]
                 query = build_pubmed_query(keyword_list, sample['disease'])
+                
                 st.session_state.last_query = query
+                
+                # Add to search history
                 if query not in st.session_state.search_history:
                     st.session_state.search_history.append(query)
+                
                 with st.spinner("Searching PubMed..."):
                     st.session_state.result_count = fetch_pubmed_count(query)
                     st.session_state.articles = fetch_pubmed_articles(query, 5)
+                    # Clear previous summaries
                     st.session_state.article_summaries = {}
                     st.session_state.key_findings = ""
                     st.session_state.research_gaps = ""
                     st.session_state.clinical_recommendations = ""
+                
                 st.rerun()
+            
             st.markdown("</div>", unsafe_allow_html=True)
     
     st.markdown("---")
@@ -935,3 +1020,4 @@ st.markdown("""
     <br>© 2025 Nahiyan Noor
 </div>
 """, unsafe_allow_html=True)
+                  
