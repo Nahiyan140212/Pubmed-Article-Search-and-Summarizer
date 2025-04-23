@@ -1,0 +1,35 @@
+# Byte-compiled Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments & env files
+.env
+venv/
+.env/
+env/
+ENV/
+.venv/
+
+# Streamlit cache
+.streamlit/
+
+# Git
+.git
+.gitignore
+
+# Docker configs
+Dockerfile
+docker-compose*.yml
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# IDE settings
+.vscode/
+.idea/
+
+# OS files
+.DS_Store

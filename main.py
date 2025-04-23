@@ -182,14 +182,16 @@ def build_pubmed_query(keywords, disease=None, year_range=None, author=None, jou
     
     return final_query
 
-def fetch_pubmed_count(query):
+def fetch_pubmed_count(query, sort_option="relevance"):
     """Fetch the total number of results for a query from PubMed."""
     headers = {"User-Agent": "Mozilla/5.0"}
     search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     search_params = {
         "db": "pubmed",
         "term": query,
-        "retmode": "json"
+        "retmode": "json",
+        "usehistory": "y",
+        "sort": sort_option
     }
     
     try:
@@ -200,7 +202,7 @@ def fetch_pubmed_count(query):
         st.error(f"Error fetching result count: {e}")
         return 0
 
-def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
+def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False, sort_option="relevance"):
     """Fetch articles from PubMed based on the query and return detailed information."""
     headers = {"User-Agent": "Mozilla/5.0"}
 
@@ -210,7 +212,9 @@ def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
         "db": "pubmed",
         "term": query,
         "retmax": max_results,
-        "retmode": "json"
+        "retmode": "json",
+        "usehistory": "y",
+        "sort": sort_option
     }
     try:
         with st.spinner("Searching PubMed database..."):
@@ -571,6 +575,8 @@ with st.sidebar:
         author = st.text_input("Author Name", placeholder="e.g. Smith AB")
         journal = st.text_input("Journal Name", placeholder="e.g. JAMA, Lancet")
         
+        sort_option = st.selectbox("Sort Results By", ["Best Match", "Most Recent"])
+        
         max_results = st.slider("Maximum Results", 1, 20, 5)
         
         search_button = st.form_submit_button("Search PubMed")
@@ -582,9 +588,9 @@ with st.sidebar:
             if st.button(f"{history_item[:40]}...", key=f"history_{i}"):
                 st.session_state.last_query = history_item
                 with st.spinner("Searching PubMed..."):
-                    st.session_state.result_count = fetch_pubmed_count(history_item)
-                    st.session_state.articles = fetch_pubmed_articles(history_item, max_results)
-                    # Clear previous summaries
+                    sort_param = "relevance" if sort_option == "Best Match" else "date"
+                    st.session_state.result_count = fetch_pubmed_count(history_item, sort_param)
+                    st.session_state.articles = fetch_pubmed_articles(history_item, max_results, sort_option=sort_param)
                     st.session_state.article_summaries = {}
                     st.session_state.key_findings = ""
                     st.session_state.research_gaps = ""
@@ -603,24 +609,19 @@ with st.sidebar:
 
 # Handle search
 if search_button:
-    # Process keywords
     keyword_list = [k.strip() for k in keywords.split(',') if k.strip()]
-    
-    # Build query
     year_range = [start_year, end_year] if start_year and end_year else None
     query = build_pubmed_query(keyword_list, disease, year_range, author, journal, logic_operator)
     
     if query:
         st.session_state.last_query = query
-        
-        # Add to search history
         if query not in st.session_state.search_history:
             st.session_state.search_history.append(query)
         
         with st.spinner("Searching PubMed..."):
-            st.session_state.result_count = fetch_pubmed_count(query)
-            st.session_state.articles = fetch_pubmed_articles(query, max_results)
-            # Clear previous summaries
+            sort_param = "relevance" if sort_option == "Best Match" else "date"
+            st.session_state.result_count = fetch_pubmed_count(query, sort_param)
+            st.session_state.articles = fetch_pubmed_articles(query, max_results, sort_option=sort_param)
             st.session_state.article_summaries = {}
             st.session_state.key_findings = ""
             st.session_state.research_gaps = ""
@@ -630,7 +631,6 @@ if search_button:
 
 # Main content area
 if st.session_state.articles:
-    # Results metrics bar
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown(f"""
@@ -660,14 +660,11 @@ if st.session_state.articles:
         </div>
         """, unsafe_allow_html=True)
     
-    # Create tabs
     tab1, tab2, tab3, tab4 = st.tabs(["Articles", "Analysis", "Q&A", "Export"])
     
-    # Tab 1: Articles
     with tab1:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
         
-        # Display the results
         for i, article in enumerate(st.session_state.articles):
             with st.expander(f"{i+1}. {article['title']}", expanded=True):
                 col1, col2 = st.columns([3, 1])
@@ -680,7 +677,6 @@ if st.session_state.articles:
                     st.markdown("### Abstract")
                     st.markdown(article['abstract'])
                     
-                    # Get or generate summary
                     if article['pmid'] not in st.session_state.article_summaries:
                         with st.spinner("Generating summary..."):
                             summary = summarize_abstract(article['abstract'])
@@ -703,21 +699,17 @@ if st.session_state.articles:
         
         st.markdown("</div>", unsafe_allow_html=True)
     
-    # Tab 2: Analysis
     with tab2:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
     
-        # Generate key findings if not already available
         if not st.session_state.key_findings:
             with st.spinner("Analyzing articles..."):
                 st.session_state.key_findings = extract_key_findings(st.session_state.articles)
     
-        # Generate research gaps if not already available
         if not st.session_state.research_gaps:
             with st.spinner("Identifying research gaps..."):
                 st.session_state.research_gaps = generate_research_gaps(st.session_state.articles)
     
-        # Generate clinical recommendations if not already available
         if not st.session_state.clinical_recommendations:
             with st.spinner("Generating clinical recommendations..."):
                 st.session_state.clinical_recommendations = generate_clinical_recommendations(st.session_state.articles)
@@ -735,10 +727,8 @@ if st.session_state.articles:
             st.markdown("### Clinical Recommendations")
             st.markdown(st.session_state.clinical_recommendations)
     
-            # Publication timeline
             st.markdown("### Publication Timeline")
     
-            # Extract years for timeline
             years_data = []
             for article in st.session_state.articles:
                 year_match = re.search(r'\b(19|20)\d{2}\b', article['publication_date'])
@@ -746,7 +736,6 @@ if st.session_state.articles:
                     years_data.append(int(year_match.group()))
     
             if years_data:
-                # Create a DataFrame for the timeline
                 years_df = pd.DataFrame(years_data, columns=['Year'])
                 year_counts = years_df['Year'].value_counts().sort_index()
                 year_counts_df = pd.DataFrame({
@@ -754,14 +743,12 @@ if st.session_state.articles:
                     'Count': year_counts.values
                 })
     
-                # Plot the timeline
                 st.bar_chart(year_counts_df.set_index('Year'))
             else:
                 st.info("Unable to extract publication years for timeline.")
     
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # Tab 3: Q&A
     with tab3:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
         st.markdown("### Ask Questions About These Articles")
@@ -775,11 +762,9 @@ if st.session_state.articles:
                 answer = answer_question(user_question, st.session_state.articles)
                 st.markdown(f"<div class='qa-box'><strong>Q: {user_question}</strong><br><br>{answer}</div>", unsafe_allow_html=True)
         elif st.session_state.user_question:
-            # Display previous answer
             answer = answer_question(st.session_state.user_question, st.session_state.articles)
             st.markdown(f"<div class='qa-box'><strong>Q: {st.session_state.user_question}</strong><br><br>{answer}</div>", unsafe_allow_html=True)
         
-        # Sample questions
         st.markdown("### Sample Questions")
         sample_questions = [
             "What are the main treatment approaches discussed in these articles?",
@@ -796,7 +781,6 @@ if st.session_state.articles:
         
         st.markdown("</div>", unsafe_allow_html=True)
     
-    # Tab 4: Export
     with tab4:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
         st.markdown("### Export Options")
@@ -806,12 +790,14 @@ if st.session_state.articles:
             ["Summary Report", "Detailed Report", "BibTeX Citations", "CSV Data"]
         )
         
+        escaped_query = st.session_state.last_query.replace('"', '"')
+        
         if export_type == "Summary Report":
             report = f"""# Literature Review Summary
 Generated on {datetime.now().strftime('%B %d, %Y')}
 
 ## Overview
-Found {st.session_state.result_count} results for query: {st.session_state.last_query.replace('"', '\\"')}
+Found {st.session_state.result_count:,} results for query: {escaped_query}
 
 ## Key Findings
 {st.session_state.key_findings}
@@ -839,7 +825,7 @@ Found {st.session_state.result_count} results for query: {st.session_state.last_
                 label="Download Summary Report",
                 data=report,
                 file_name=f"medsearch_summary_{datetime.now().strftime('%Y%m%d')}.md",
-                mime="text/pdf"
+                mime="text/markdown"
             )
         
         elif export_type == "Detailed Report":
@@ -847,7 +833,7 @@ Found {st.session_state.result_count} results for query: {st.session_state.last_
 Generated on {datetime.now().strftime('%B %d, %Y')}
 
 ## Search Details
-* Query: {st.session_state.last_query.replace('"', '\\"')}
+* Query: {escaped_query}
 * Total Results: {st.session_state.result_count}
 * Articles Analyzed: {len(st.session_state.articles)}
 
@@ -889,21 +875,15 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
                 label="Download Detailed Report",
                 data=detailed_report,
                 file_name=f"medsearch_detailed_{datetime.now().strftime('%Y%m%d')}.md",
-<<<<<<< HEAD
-                mime="text/pdf"
-=======
-                mime="application/pdf"
->>>>>>> 57fa8d4f69de67b05550e01f70df39aef701faa9
+                mime="text/markdown"
             )
         
         elif export_type == "BibTeX Citations":
             bibtex = ""
             for article in st.session_state.articles:
-                # Extract year
                 year_match = re.search(r'\b(19|20)\d{2}\b', article['publication_date'])
                 year = year_match.group() if year_match else "n.d."
                 
-                # Create citation key
                 first_author_last = article['authors'][0].split()[-1] if article['authors'] else "Unknown"
                 citation_key = f"{first_author_last.lower()}{year}"
                 
@@ -926,7 +906,6 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
             )
         
         elif export_type == "CSV Data":
-            # Prepare data for CSV
             csv_data = []
             for article in st.session_state.articles:
                 csv_data.append({
@@ -941,10 +920,7 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
                     "Summary": st.session_state.article_summaries.get(article['pmid'], 'No summary available')
                 })
             
-            # Convert to DataFrame
             df = pd.DataFrame(csv_data)
-            
-            # Convert to CSV
             csv = df.to_csv(index=False)
             
             st.download_button(
@@ -957,7 +933,6 @@ Generated on {datetime.now().strftime('%B %d, %Y')}
         st.markdown("</div>", unsafe_allow_html=True)
 
 else:
-    # Display sample searches
     st.markdown("## Welcome to PubMedSearch")
     st.markdown("""
     Use the search form in the sidebar to find and analyze medical research articles.
@@ -984,20 +959,17 @@ else:
             st.markdown(f"Disease: {sample['disease']}")
             
             if st.button("Try This Search", key=f"sample_btn_{i}"):
-                # Process sample search
                 keyword_list = [k.strip() for k in sample['keywords'].split(',') if k.strip()]
                 query = build_pubmed_query(keyword_list, sample['disease'])
                 
                 st.session_state.last_query = query
-                
-                # Add to search history
                 if query not in st.session_state.search_history:
                     st.session_state.search_history.append(query)
                 
                 with st.spinner("Searching PubMed..."):
-                    st.session_state.result_count = fetch_pubmed_count(query)
-                    st.session_state.articles = fetch_pubmed_articles(query, 5)
-                    # Clear previous summaries
+                    sort_param = "relevance" if sort_option == "Best Match" else "date"
+                    st.session_state.result_count = fetch_pubmed_count(query, sort_param)
+                    st.session_state.articles = fetch_pubmed_articles(query, 5, sort_option=sort_param)
                     st.session_state.article_summaries = {}
                     st.session_state.key_findings = ""
                     st.session_state.research_gaps = ""
@@ -1024,4 +996,3 @@ st.markdown("""
     <br>© 2025 Nahiyan Noor
 </div>
 """, unsafe_allow_html=True)
-                  
