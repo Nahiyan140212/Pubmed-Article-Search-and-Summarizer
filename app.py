@@ -475,7 +475,7 @@ def summarize_abstract(abstract, max_length=300):
         prompt = f"Summarize the following medical abstract in about 2-3 sentences (maximum {max_length} characters):\n\n{abstract}"
 
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "You are a medical research summarizer. Create concise, accurate summaries that capture the key findings and implications."},
                 {"role": "user", "content": prompt}
@@ -508,7 +508,7 @@ Question: {question}
 Answer the question factually based only on the information provided in these articles. If the articles don't contain relevant information to answer the question, clearly state that it cannot be answered from the provided context."""
 
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "You are a medical research assistant. Provide factual, accurate answers based only on the provided medical literature. Be clear about limitations when information is insufficient."},
                 {"role": "user", "content": prompt}
@@ -536,7 +536,7 @@ def extract_key_findings(articles_data):
 Format your response as bullet points, focusing on clinically relevant insights and consensus findings."""
 
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "You are a medical research analyst. Identify key findings and patterns across multiple research articles."},
                 {"role": "user", "content": prompt}
@@ -564,7 +564,7 @@ def generate_research_gaps(articles_data):
 Format your response as bullet points, focusing on clinically relevant gaps that future research should address."""
 
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "You are a medical research strategist. Identify important gaps in the current research landscape."},
                 {"role": "user", "content": prompt}
@@ -592,7 +592,7 @@ def generate_clinical_recommendations(articles_data):
 Format your response as bullet points with brief explanations, focusing on practical applications for clinicians. Be clear about the strength of evidence."""
 
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "You are a medical research consultant. Provide evidence-based clinical recommendations based on research findings."},
                 {"role": "user", "content": prompt}
