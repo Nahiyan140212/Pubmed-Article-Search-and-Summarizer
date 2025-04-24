@@ -666,8 +666,8 @@ with st.sidebar:
         with col2:
             end_year = st.number_input("To Year", min_value=1900, max_value=datetime.now().year, value=datetime.now().year)
         
-        author = st.text_input("Author Name", placeholder="e.g. Smith AB")
-        journal = st.text_input("Journal Name", placeholder="e.g. JAMA, Lancet")
+        # author = st.text_input("Author Name", placeholder="e.g. Smith AB")
+        # journal = st.text_input("Journal Name", placeholder="e.g. JAMA, Lancet")
         
         sort_option = st.selectbox("Sort Results By", ["Best Match", "Most Recent"])
         
