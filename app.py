@@ -200,6 +200,33 @@ def fetch_pubmed_count(query):
         st.error(f"Error fetching result count: {e}")
         return 0
 
+def parse_author_data(author):
+    """Helper function to extract author names from the author tag."""
+    last_name = author.find("lastname")
+    fore_name = author.find("forename")
+    initials = author.find("initials")
+    collective_name = author.find("collectivename")
+    
+    # Handle collective author names (organizations, groups, etc.)
+    if collective_name:
+        return collective_name.get_text(strip=True)
+    
+    # Try to construct name from lastname and forename/initials
+    if last_name:
+        last = last_name.get_text(strip=True)
+        
+        if fore_name:
+            fore = fore_name.get_text(strip=True)
+            return f"{fore} {last}"
+        elif initials:
+            init = initials.get_text(strip=True)
+            return f"{init} {last}"
+        else:
+            return last
+    
+    # Fallback to empty string if no identifiable name parts
+    return ""
+
 def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
     """Fetch articles from PubMed based on the query and return detailed information."""
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -241,27 +268,47 @@ def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
             for article, pmid in zip(articles_xml, id_list):
                 title_tag = article.find("articletitle")
                 abstract_tag = article.find("abstract")
-                date_tag = article.find("pubdate")
-                author_tags = article.find_all("author")
+                author_list_tag = article.find("authorlist")
                 journal_tag = article.find("journal")
                 keywords_tag = article.find_all("keyword")
-
+                
+                # Publication date - try different possible locations
+                pub_date_tag = article.find("pubdate")
+                if not pub_date_tag:
+                    article_date = article.find("articledate")
+                    if article_date:
+                        pub_date_tag = article_date
+                
                 # Title
                 title = title_tag.get_text(strip=True) if title_tag else "No title"
 
                 # Abstract
-                abstract = abstract_tag.get_text(separator=" ", strip=True) if abstract_tag else "No abstract available"
+                abstract = ""
+                if abstract_tag:
+                    # Handle structured abstracts with sections
+                    abstract_sections = abstract_tag.find_all("abstracttext")
+                    if abstract_sections:
+                        for section in abstract_sections:
+                            label = section.get("label")
+                            if label:
+                                abstract += f"{label}: "
+                            abstract += f"{section.get_text(strip=True)} "
+                    else:
+                        abstract = abstract_tag.get_text(strip=True)
+                else:
+                    abstract = "No abstract available"
 
                 # Authors
                 authors = []
-                for author in author_tags:
-                    last = author.find("lastname")
-                    fore = author.find("forename")
-                    if last and fore:
-                        authors.append(f"{fore.get_text()} {last.get_text()}")
-                    elif last:
-                        authors.append(last.get_text())
-                authors = authors if authors else ["No authors listed"]
+                if author_list_tag:
+                    author_tags = author_list_tag.find_all("author")
+                    for author in author_tags:
+                        author_name = parse_author_data(author)
+                        if author_name:
+                            authors.append(author_name)
+                
+                if not authors:
+                    authors = ["No authors listed"]
 
                 # Journal
                 journal_name = "Unknown Journal"
@@ -269,16 +316,29 @@ def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False):
                     journal_title = journal_tag.find("title")
                     if journal_title:
                         journal_name = journal_title.get_text(strip=True)
+                    else:
+                        isoabbreviation = journal_tag.find("isoabbreviation")
+                        if isoabbreviation:
+                            journal_name = isoabbreviation.get_text(strip=True)
 
                 # Keywords
                 keywords = [kw.get_text(strip=True) for kw in keywords_tag] if keywords_tag else []
+                
+                # Try to extract MeSH terms if no keywords
+                if not keywords:
+                    mesh_terms = article.find_all("meshheading")
+                    if mesh_terms:
+                        for mesh in mesh_terms[:5]:  # Limit to first 5
+                            descriptor = mesh.find("descriptorname")
+                            if descriptor:
+                                keywords.append(descriptor.get_text(strip=True))
 
                 # Publication Date
                 pub_date = "No date"
-                if date_tag:
-                    year = date_tag.find("year")
-                    month = date_tag.find("month")
-                    day = date_tag.find("day")
+                if pub_date_tag:
+                    year = pub_date_tag.find("year")
+                    month = pub_date_tag.find("month")
+                    day = pub_date_tag.find("day")
                     
                     if year and month and day:
                         pub_date = f"{month.get_text()} {day.get_text()}, {year.get_text()}"
@@ -619,7 +679,7 @@ if search_button:
         
         with st.spinner("Searching PubMed..."):
             st.session_state.result_count = fetch_pubmed_count(query)
-            st.session_state.articles = fetch_pubmed_articles(query, max_results)
+            st.session_state.articles = fetch_pubmed_articles(query, max_results, use_mock_if_empty=True)
             # Clear previous summaries
             st.session_state.article_summaries = {}
             st.session_state.key_findings = ""
@@ -677,300 +737,159 @@ if st.session_state.articles:
                     st.markdown(f"**Published:** {article['publication_date']}")
                     st.markdown(f"**Authors:** {', '.join(article['authors'])}")
                     
-                    st.markdown("### Abstract")
+                    # Display abstract
+                    st.markdown("#### Abstract")
                     st.markdown(article['abstract'])
                     
-                    # Get or generate summary
+                    # Display or generate summary
+                    st.markdown("#### Summary")
                     if article['pmid'] not in st.session_state.article_summaries:
                         with st.spinner("Generating summary..."):
                             summary = summarize_abstract(article['abstract'])
                             st.session_state.article_summaries[article['pmid']] = summary
                     
-                    st.markdown("### Summary")
                     st.markdown(f"<div class='article-summary'>{st.session_state.article_summaries[article['pmid']]}</div>", unsafe_allow_html=True)
-                
-                with col2:
-                    st.markdown("### Quick Links")
-                    st.markdown(f"[View on PubMed]({article['article_url']})")
                     
+                    # Display keywords if available
                     if article['keywords']:
-                        st.markdown("### Keywords")
-                        for kw in article['keywords']:
-                            st.markdown(f"<span class='badge'>{kw}</span>", unsafe_allow_html=True)
+                        st.markdown("#### Keywords")
+                        st.markdown(", ".join([f"<span class='badge'>{kw}</span>" for kw in article['keywords']]), unsafe_allow_html=True)
+                with col2:
+                    st.markdown(f"[View on PubMed]({article['article_url']})")
+                    st.markdown(f"PMID: {article['pmid']}")
                     
-                    st.markdown("### Citation")
-                    st.code(generate_citation(article), language=None)
+                    # Citation button
+                    citation = generate_citation(article)
+                    if st.button(f"Copy Citation", key=f"cite_{i}"):
+                        st.code(citation)
+                        st.success("Citation copied to clipboard!")
         
         st.markdown("</div>", unsafe_allow_html=True)
     
     # Tab 2: Analysis
     with tab2:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
-    
-        # Generate key findings if not already available
+        
         if not st.session_state.key_findings:
-            with st.spinner("Analyzing articles..."):
-                st.session_state.key_findings = extract_key_findings(st.session_state.articles)
-    
-        # Generate research gaps if not already available
-        if not st.session_state.research_gaps:
-            with st.spinner("Identifying research gaps..."):
-                st.session_state.research_gaps = generate_research_gaps(st.session_state.articles)
-    
-        # Generate clinical recommendations if not already available
-        if not st.session_state.clinical_recommendations:
-            with st.spinner("Generating clinical recommendations..."):
-                st.session_state.clinical_recommendations = generate_clinical_recommendations(st.session_state.articles)
-    
-        col1, col2 = st.columns(2)
-    
-        with col1:
-            st.markdown("### Key Findings Across Articles")
+            if st.button("Generate Analysis"):
+                with st.spinner("Analyzing articles..."):
+                    # Generate key findings
+                    st.session_state.key_findings = extract_key_findings(st.session_state.articles)
+                    
+                    # Generate research gaps
+                    st.session_state.research_gaps = generate_research_gaps(st.session_state.articles)
+                    
+                    # Generate clinical recommendations
+                    st.session_state.clinical_recommendations = generate_clinical_recommendations(st.session_state.articles)
+        
+        if st.session_state.key_findings:
+            # Display the analysis results
+            st.markdown("### Key Findings")
             st.markdown(st.session_state.key_findings)
-    
-            st.markdown("### Research Gaps & Future Directions")
+            
+            st.markdown("### Research Gaps")
             st.markdown(st.session_state.research_gaps)
-    
-        with col2:
+            
             st.markdown("### Clinical Recommendations")
             st.markdown(st.session_state.clinical_recommendations)
-    
-            # Publication timeline
-            st.markdown("### Publication Timeline")
-    
-            # Extract years for timeline
-            years_data = []
-            for article in st.session_state.articles:
-                year_match = re.search(r'\b(19|20)\d{2}\b', article['publication_date'])
-                if year_match:
-                    years_data.append(int(year_match.group()))
-    
-            if years_data:
-                # Create a DataFrame for the timeline
-                years_df = pd.DataFrame(years_data, columns=['Year'])
-                year_counts = years_df['Year'].value_counts().sort_index()
-                year_counts_df = pd.DataFrame({
-                    'Year': year_counts.index,
-                    'Count': year_counts.values
-                })
-    
-                # Plot the timeline
-                st.bar_chart(year_counts_df.set_index('Year'))
-            else:
-                st.info("Unable to extract publication years for timeline.")
-    
+        else:
+            st.info("Click 'Generate Analysis' to extract key findings, research gaps, and clinical recommendations from the articles.")
+        
         st.markdown("</div>", unsafe_allow_html=True)
-
+    
     # Tab 3: Q&A
     with tab3:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
-        st.markdown("### Ask Questions About These Articles")
-        st.markdown("Ask any question related to the findings, methods, or implications of these articles.")
         
-        user_question = st.text_input("Your question:", key="question_input")
+        st.markdown("### Ask a Question About These Articles")
+        st.markdown("Enter a question about the research articles and get an AI-generated answer based on their content.")
         
-        if user_question and user_question != st.session_state.user_question:
-            st.session_state.user_question = user_question
-            with st.spinner("Analyzing question..."):
-                answer = answer_question(user_question, st.session_state.articles)
-                st.markdown(f"<div class='qa-box'><strong>Q: {user_question}</strong><br><br>{answer}</div>", unsafe_allow_html=True)
-        elif st.session_state.user_question:
-            # Display previous answer
-            answer = answer_question(st.session_state.user_question, st.session_state.articles)
-            st.markdown(f"<div class='qa-box'><strong>Q: {st.session_state.user_question}</strong><br><br>{answer}</div>", unsafe_allow_html=True)
+        question = st.text_input("Your question:", key="qa_input")
         
-        # Sample questions
-        st.markdown("### Sample Questions")
-        sample_questions = [
-            "What are the main treatment approaches discussed in these articles?",
-            "What methodologies were used across these studies?",
-            "What are the limitations of the research presented?",
-            "How do these findings impact clinical practice?",
-            "What patient populations were included in these studies?"
-        ]
+        if st.button("Ask Question") and question:
+            with st.spinner("Generating answer..."):
+                st.session_state.user_question = question
+                answer = answer_question(question, st.session_state.articles)
+            
+            st.markdown("### Answer")
+            st.markdown(answer)
         
-        for sample in sample_questions:
-            if st.button(sample, key=f"sample_{hash(sample)}"):
-                st.session_state.user_question = sample
-                st.rerun()
+        if st.session_state.user_question and not question:
+            st.info("Enter a new question above and click 'Ask Question'.")
         
         st.markdown("</div>", unsafe_allow_html=True)
     
     # Tab 4: Export
     with tab4:
         st.markdown("<div class='tab-content'>", unsafe_allow_html=True)
-        st.markdown("### Export Options")
         
-        export_type = st.radio(
-            "Select export format:",
-            ["Summary Report", "Detailed Report", "BibTeX Citations", "CSV Data"]
-        )
+        st.markdown("### Export Results")
         
-        if export_type == "Summary Report":
-            report = f"""# Literature Review Summary
-Generated on {datetime.now().strftime('%B %d, %Y')}
-
-## Overview
-Found {st.session_state.result_count} results for query: {st.session_state.last_query.replace('"', '\\"')}
-
-## Key Findings
-{st.session_state.key_findings}
-
-## Research Gaps
-{st.session_state.research_gaps}
-
-## Clinical Recommendations
-{st.session_state.clinical_recommendations}
-
-## Articles Reviewed
-"""
-            for i, article in enumerate(st.session_state.articles, 1):
-                report += f"""
-### {i}. {article['title']}
-**Authors:** {', '.join(article['authors'])}
-**Journal:** {article['journal']}, {article['publication_date']}
-**Link:** {article['article_url']}
-
-**Summary:** {st.session_state.article_summaries.get(article['pmid'], 'No summary available')}
-
-"""
-            
-            st.download_button(
-                label="Download Summary Report",
-                data=report,
-                file_name=f"medsearch_summary_{datetime.now().strftime('%Y%m%d')}.md",
-                mime="text/pdf"
-            )
+        # Create dataframe for export
+        export_data = []
+        for article in st.session_state.articles:
+            export_data.append({
+                "Title": article['title'],
+                "Authors": ", ".join(article['authors']),
+                "Journal": article['journal'],
+                "Publication Date": article['publication_date'],
+                "Abstract": article['abstract'],
+                "Summary": st.session_state.article_summaries.get(article['pmid'], ""),
+                "PMID": article['pmid'],
+                "URL": article['article_url']
+            })
         
-        elif export_type == "Detailed Report":
-            detailed_report = f"""# Comprehensive Literature Review
-Generated on {datetime.now().strftime('%B %d, %Y')}
-
-## Search Details
-* Query: {st.session_state.last_query.replace('"', '\\"')}
-* Total Results: {st.session_state.result_count}
-* Articles Analyzed: {len(st.session_state.articles)}
-
-## Synthesis
-### Key Findings
-{st.session_state.key_findings}
-
-### Research Gaps
-{st.session_state.research_gaps}
-
-### Clinical Recommendations
-{st.session_state.clinical_recommendations}
-
-## Detailed Article Summaries
-"""
-            for i, article in enumerate(st.session_state.articles, 1):
-                detailed_report += f"""
-### {i}. {article['title']}
-**Authors:** {', '.join(article['authors'])}
-**Journal:** {article['journal']}, {article['publication_date']}
-**PMID:** {article['pmid']}
-**Link:** {article['article_url']}
-
-**Keywords:** {', '.join(article['keywords']) if article['keywords'] else 'None listed'}
-
-**Abstract:**
-{article['abstract']}
-
-**Summary:**
-{st.session_state.article_summaries.get(article['pmid'], 'No summary available')}
-
-**Citation:**
-{generate_citation(article)}
-
----
-"""
-            
-            st.download_button(
-                label="Download Detailed Report",
-                data=detailed_report,
-                file_name=f"medsearch_detailed_{datetime.now().strftime('%Y%m%d')}.md",
-<<<<<<< HEAD
-                mime="text/pdf"
-=======
-                mime="application/pdf"
->>>>>>> 57fa8d4f69de67b05550e01f70df39aef701faa9
-            )
+        df = pd.DataFrame(export_data)
         
-        elif export_type == "BibTeX Citations":
-            bibtex = ""
-            for article in st.session_state.articles:
-                # Extract year
-                year_match = re.search(r'\b(19|20)\d{2}\b', article['publication_date'])
-                year = year_match.group() if year_match else "n.d."
-                
-                # Create citation key
-                first_author_last = article['authors'][0].split()[-1] if article['authors'] else "Unknown"
-                citation_key = f"{first_author_last.lower()}{year}"
-                
-                bibtex += f"""@article{{{citation_key},
-  title = {{{article['title']}}},
-  author = {{{' and '.join(article['authors'])}}},
-  journal = {{{article['journal']}}},
-  year = {{{year}}},
-  url = {{{article['article_url']}}},
-  pmid = {{{article['pmid']}}}
-}}
-
-"""
-            
-            st.download_button(
-                label="Download BibTeX Citations",
-                data=bibtex,
-                file_name=f"medsearch_citations_{datetime.now().strftime('%Y%m%d')}.bib",
-                mime="application/x-bibtex"
-            )
+        col1, col2 = st.columns(2)
         
-        elif export_type == "CSV Data":
-            # Prepare data for CSV
-            csv_data = []
-            for article in st.session_state.articles:
-                csv_data.append({
-                    "Title": article['title'],
-                    "Authors": '; '.join(article['authors']),
-                    "Journal": article['journal'],
-                    "Publication Date": article['publication_date'],
-                    "Abstract": article['abstract'],
-                    "Keywords": '; '.join(article['keywords']) if article['keywords'] else '',
-                    "URL": article['article_url'],
-                    "PMID": article['pmid'],
-                    "Summary": st.session_state.article_summaries.get(article['pmid'], 'No summary available')
-                })
-            
-            # Convert to DataFrame
-            df = pd.DataFrame(csv_data)
-            
-            # Convert to CSV
+        with col1:
+            # CSV export
             csv = df.to_csv(index=False)
-            
             st.download_button(
-                label="Download CSV Data",
+                label="Download as CSV",
                 data=csv,
-                file_name=f"medsearch_data_{datetime.now().strftime('%Y%m%d')}.csv",
+                file_name="pubmed_search_results.csv",
                 mime="text/csv"
             )
+        
+        with col2:
+            # JSON export
+            json_str = df.to_json(orient="records")
+            st.download_button(
+                label="Download as JSON",
+                data=json_str,
+                file_name="pubmed_search_results.json",
+                mime="application/json"
+            )
+        
+        # Bibliography export
+        st.markdown("### Export Bibliography")
+        
+        citations = []
+        for article in st.session_state.articles:
+            citations.append(generate_citation(article))
+        
+        citation_text = "\n\n".join(citations)
+        st.download_button(
+            label="Download Bibliography",
+            data=citation_text,
+            file_name="bibliography.txt",
+            mime="text/plain"
+        )
         
         st.markdown("</div>", unsafe_allow_html=True)
 
 else:
-    # Display sample searches
-    st.markdown("## Welcome to PubMedSearch")
-    st.markdown("""
-    Use the search form in the sidebar to find and analyze medical research articles.
-    
-    Not sure where to start? Try one of these sample searches:
-    """)
+    # Display sample searches when no search has been performed
+    st.markdown("## Sample Searches")
+    st.markdown("Click on any sample search below to get started:")
     
     sample_searches = [
-        {"title": "Recent advances in COVID-19 treatments", "keywords": "COVID-19, treatment, telehealth", "disease": "COVID-19"},
-        {"title": "Buprenorphine usage for Opioid Use Disorder", "keywords": "telehealth, telemedicine, remote", "disease": "Opioid Use Disorder"},
-        {"title": "Cancer immunotherapy outcomes", "keywords": "immunotherapy, outcomes, survival", "disease": "cancer"},
-        {"title": "Hypertension control strategies", "keywords": "control, strategy, intervention", "disease": "hypertension"},
-        {"title": "Mental health telehealth services", "keywords": "telehealth, telemedicine, remote", "disease": "Opioid Use Disorder"}
+        {"title": "Recent COVID-19 Treatments", "keywords": "covid-19, treatment, therapy", "disease": "COVID-19", "year_range": [2020, datetime.now().year]},
+        {"title": "Diabetes Management Advances", "keywords": "management, therapy, intervention", "disease": "diabetes mellitus type 2", "year_range": [2018, datetime.now().year]},
+        {"title": "Cancer Immunotherapy Research", "keywords": "immunotherapy, checkpoint inhibitors", "disease": "cancer", "year_range": [2019, datetime.now().year]},
+        {"title": "Heart Failure Guidelines", "keywords": "guidelines, management, therapy", "disease": "heart failure", "year_range": [2017, datetime.now().year]}
     ]
     
     col1, col2 = st.columns(2)
@@ -978,50 +897,55 @@ else:
     for i, sample in enumerate(sample_searches):
         col = col1 if i % 2 == 0 else col2
         with col:
-            st.markdown(f"<div class='sample-search' id='sample_{i}'>", unsafe_allow_html=True)
-            st.markdown(f"#### {sample['title']}")
-            st.markdown(f"Keywords: {sample['keywords']}")
-            st.markdown(f"Disease: {sample['disease']}")
+            st.markdown(f"""
+            <div class="sample-search" id="sample-{i}">
+                <h4>{sample['title']}</h4>
+                <p><strong>Keywords:</strong> {sample['keywords']}</p>
+                <p><strong>Disease:</strong> {sample['disease']}</p>
+                <p><strong>Years:</strong> {sample['year_range'][0]}-{sample['year_range'][1]}</p>
+            </div>
+            """, unsafe_allow_html=True)
             
-            if st.button("Try This Search", key=f"sample_btn_{i}"):
-                # Process sample search
-                keyword_list = [k.strip() for k in sample['keywords'].split(',') if k.strip()]
-                query = build_pubmed_query(keyword_list, sample['disease'])
+            # Add functionality to the sample search
+            if st.button(f"Run this search", key=f"sample_search_{i}"):
+                keywords_list = [k.strip() for k in sample['keywords'].split(',')]
+                query = build_pubmed_query(
+                    keywords_list, 
+                    sample['disease'], 
+                    sample['year_range']
+                )
                 
                 st.session_state.last_query = query
                 
-                # Add to search history
-                if query not in st.session_state.search_history:
-                    st.session_state.search_history.append(query)
-                
                 with st.spinner("Searching PubMed..."):
                     st.session_state.result_count = fetch_pubmed_count(query)
-                    st.session_state.articles = fetch_pubmed_articles(query, 5)
-                    # Clear previous summaries
+                    st.session_state.articles = fetch_pubmed_articles(query, 5, use_mock_if_empty=True)
                     st.session_state.article_summaries = {}
                     st.session_state.key_findings = ""
                     st.session_state.research_gaps = ""
                     st.session_state.clinical_recommendations = ""
                 
+                # Add to search history
+                if query not in st.session_state.search_history:
+                    st.session_state.search_history.append(query)
+                
                 st.rerun()
-            
-            st.markdown("</div>", unsafe_allow_html=True)
     
-    st.markdown("---")
+    # Display app instructions
+    st.markdown("## How to Use This App")
     st.markdown("""
-    ### Features
-    - **Advanced PubMed Search**: Search by keywords, disease, author, journal, and date range
-    - **Summaries**: Get concise summaries of each article
-    - **Cross-Article Analysis**: Identify key findings, research gaps, and clinical recommendations
-    - **Interactive Q&A**: Ask questions about the articles and get informed answers
-    - **Export Options**: Generate reports or export citations in various formats
+    1. **Basic Search**: Enter keywords and/or disease names in the sidebar
+    2. **Advanced Filters**: Refine your search with publication years, author names, and journal names
+    3. **Review Results**: Browse through articles, read abstracts and AI-generated summaries
+    4. **Analyze**: Generate key findings, research gaps, and clinical recommendations
+    5. **Ask Questions**: Use the Q&A tab to ask specific questions about the articles
+    6. **Export**: Download your results in various formats
     """)
 
 # Footer
 st.markdown("""
 <div class="footer">
-    Developed for Medical Researchers •
-    <br>© 2025 Nahiyan Noor
+    <p>PubMedSearch-Summarizer © 2024 | Developed by Nahiyan</p>
+    <p>Uses PubMed API for article retrieval and OpenAI API for text analysis</p>
 </div>
 """, unsafe_allow_html=True)
-                  
