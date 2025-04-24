@@ -705,7 +705,7 @@ with st.sidebar:
 if search_button:
     keyword_list = [k.strip() for k in keywords.split(',') if k.strip()]
     year_range = [start_year, end_year] if start_year and end_year else None
-    query = build_pubmed_query(keyword_list, disease, year_range, author, journal, logic_operator)
+    query = build_pubmed_query(keyword_list, disease, logic_operator)
     
     if query:
         st.session_state.last_query = query
