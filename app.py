@@ -168,7 +168,7 @@ def sanitize_input(text):
     text = re.sub(r'\s+', ' ', text)
     return text
 
-def build_pubmed_query(keywords, disease=None, year_range=None, author=None, journal=None, logic_operator="AND", optional_operator="OR"):
+def build_pubmed_query(keywords, disease=None, year_range=None, logic_operator="AND", optional_operator="OR"):
     """
     Build a query string for PubMed using various filters.
     
