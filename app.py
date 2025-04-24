@@ -148,123 +148,42 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-import requests
-import logging
-import re
-import time
-from bs4 import BeautifulSoup
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-def sanitize_input(text):
-    """Remove special characters and extra spaces from input."""
-    if not text:
-        return text
-    # Remove special characters, keep letters, numbers, spaces, and hyphens
-    text = re.sub(r'[^\w\s-]', '', text.strip())
-    # Replace multiple spaces with single space
-    text = re.sub(r'\s+', ' ', text)
-    return text
-
-def build_pubmed_query(keywords, disease=None, year_range=None, logic_operator="AND", optional_operator="OR"):
-    """
-    Build a query string for PubMed using various filters.
+# Functions for PubMed API interaction
+def build_pubmed_query(keywords, disease=None, year_range=None, author=None, journal=None, logic_operator="AND"):
+    """Build a query string for PubMed using various filters."""
     
-    Args:
-        keywords (list): List of keywords to search.
-        disease (str, optional): Disease name to include in query.
-        year_range (tuple, optional): Tuple of (start_year, end_year).
-        author (str, optional): Author name to filter by.
-        journal (str, optional): Journal name to filter by.
-        logic_operator (str): Operator to join core query parts ("AND", "OR", "NOT").
-        optional_operator (str): Operator for optional fields ("AND", "OR", "NOT").
-    
-    Returns:
-        str: Formatted PubMed query string.
-    
-    Raises:
-        ValueError: If no valid query parameters are provided or inputs are invalid.
-    """
-    valid_operators = {"AND", "OR", "NOT"}
-    if logic_operator not in valid_operators or optional_operator not in valid_operators:
-        raise ValueError(f"Operators must be one of {valid_operators}")
-
-    query_parts = []
-
     # Process keywords
-    if keywords and any(kw.strip() for kw in keywords):
-        keywords_str = " ".join(f'"{sanitize_input(kw)}"' for kw in keywords if kw.strip())
+    keywords_str = " ".join(f'"{kw}"' for kw in keywords if kw.strip())
+    
+    # Start building query components
+    query_parts = []
+    
+    if keywords_str:
         query_parts.append(f"({keywords_str})")
-
-    # Add disease
+    
     if disease and disease.strip():
-        disease = sanitize_input(disease)
         query_parts.append(f'("{disease}"[MeSH Terms] OR "{disease}"[All Fields])')
-
-    # Add year range
+    
+    # Add year range if provided
     if year_range and len(year_range) == 2:
-        try:
-            start_year, end_year = map(int, year_range)
-            if start_year > end_year:
-                raise ValueError("Start year must be less than or equal to end year")
-            query_parts.append(f"({start_year}[PDAT]:{end_year}[PDAT])")
-        except (ValueError, TypeError):
-            raise ValueError("year_range must be a tuple/list of two valid integers")
-
-    # Combine core parts with logic_operator
-    core_query = f" {logic_operator} ".join(query_parts) if query_parts else ""
-
-    # Optional fields (author, journal)
-    optional_parts = []
+        start_year, end_year = year_range
+        query_parts.append(f"({start_year}[PDAT]:{end_year}[PDAT])")
+    
+    # Add author if provided
     if author and author.strip():
-        author = sanitize_input(author)
-        author_parts = author.split()
-        if len(author_parts) > 1:
-            last_name = author_parts[-1]
-            initials = "".join(name[0] for name in author_parts[:-1])
-            author_formatted = f"{last_name} {initials}"
-            optional_parts.append(f'"{author_formatted}"[Author]')
-        else:
-            optional_parts.append(f'{author}[Author]')
-
+        query_parts.append(f'"{author}"[Author]')
+    
+    # Add journal if provided
     if journal and journal.strip():
-        journal = sanitize_input(journal)
-        optional_parts.append(f'"{journal}"[Journal] OR {journal}[Journal]')
-
-    # Combine optional parts with optional_operator
-    optional_query = f" {optional_operator} ".join(optional_parts) if optional_parts else ""
-
-    # Combine core and optional queries
-    if core_query and optional_query:
-        final_query = f"({core_query}) AND ({optional_query})"
-    elif core_query:
-        final_query = core_query
-    elif optional_query:
-        final_query = optional_query
-    else:
-        raise ValueError("At least one query parameter must be provided")
-
-    logger.info(f"Generated PubMed query: {final_query}")
+        query_parts.append(f'"{journal}"[Journal]')
+    
+    # Join all parts with the selected operator
+    final_query = f" {logic_operator} ".join(query_parts)
+    
     return final_query
 
-def fetch_pubmed_count(query, sort_option="relevance", api_key=None):
-    """
-    Fetch the total number of results for a query from PubMed.
-    
-    Args:
-        query (str): PubMed query string.
-        sort_option (str): Sorting option ("relevance", "date", "journal", "author").
-        api_key (str, optional): PubMed API key for higher rate limits.
-    
-    Returns:
-        int: Total number of results, or 0 if an error occurs.
-    """
-    valid_sort_options = {"relevance", "date", "journal", "author"}
-    if sort_option not in valid_sort_options:
-        raise ValueError(f"sort_option must be one of {valid_sort_options}")
-
+def fetch_pubmed_count(query, sort_option="relevance"):
+    """Fetch the total number of results for a query from PubMed."""
     headers = {"User-Agent": "Mozilla/5.0"}
     search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     search_params = {
@@ -274,44 +193,20 @@ def fetch_pubmed_count(query, sort_option="relevance", api_key=None):
         "usehistory": "y",
         "sort": sort_option
     }
-    if api_key:
-        search_params["api_key"] = api_key
-
+    
     try:
-        response = requests.get(search_url, params=search_params, headers=headers, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        count = int(data["esearchresult"]["count"])
-        logger.info(f"Found {count} results for query: {query}")
+        search_response = requests.get(search_url, params=search_params, headers=headers, timeout=10).json()
+        count = int(search_response["esearchresult"]["count"])
         return count
-    except requests.RequestException as e:
-        logger.error(f"Network error fetching PubMed count: {e}")
-        return 0
-    except (ValueError, KeyError) as e:
-        logger.error(f"Error parsing PubMed count response: {e}")
+    except Exception as e:
+        st.error(f"Error fetching result count: {e}")
         return 0
 
-def fetch_pubmed_articles(query, max_results=5, sort_option="relevance", api_key=None):
-    """
-    Fetch articles from PubMed based on the query and return detailed information.
-    
-    Args:
-        query (str): PubMed query string.
-        max_results (int): Maximum number of articles to return.
-        sort_option (str): Sorting option ("relevance", "date", "journal", "author").
-        api_key (str, optional): PubMed API key for higher rate limits.
-    
-    Returns:
-        list: List of dictionaries containing article details, or empty list if none found or error.
-    """
-    if max_results < 0:
-        raise ValueError("max_results must be non-negative")
-    
-    valid_sort_options = {"relevance", "date", "journal", "author"}
-    if sort_option not in valid_sort_options:
-        raise ValueError(f"sort_option must be one of {valid_sort_options}")
-
+def fetch_pubmed_articles(query, max_results=5, use_mock_if_empty=False, sort_option="relevance"):
+    """Fetch articles from PubMed based on the query and return detailed information."""
     headers = {"User-Agent": "Mozilla/5.0"}
+
+    # Step 1: Search PubMed
     search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     search_params = {
         "db": "pubmed",
@@ -321,129 +216,120 @@ def fetch_pubmed_articles(query, max_results=5, sort_option="relevance", api_key
         "usehistory": "y",
         "sort": sort_option
     }
-    if api_key:
-        search_params["api_key"] = api_key
-
     try:
-        logger.info("Searching PubMed database...")
-        response = requests.get(search_url, params=search_params, headers=headers, timeout=15)
-        response.raise_for_status()
-        search_data = response.json()
-        id_list = search_data["esearchresult"]["idlist"]
-        total_count = int(search_data["esearchresult"]["count"])
+        with st.spinner("Searching PubMed database..."):
+            search_response = requests.get(search_url, params=search_params, headers=headers, timeout=10).json()
+            id_list = search_response["esearchresult"]["idlist"]
+            
+            if not id_list:
+                if use_mock_if_empty:
+                    st.warning("No articles found. Showing simulated data.")
+                    return generate_mock_data()
+                return []
 
-        if not id_list:
-            logger.warning(f"No articles found for query: {query}. Total results: {total_count}")
+            ids = ",".join(id_list)
+
+        # Step 2: Fetch article summaries
+        with st.spinner("Retrieving article details..."):
+            fetch_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+            fetch_params = {
+                "db": "pubmed",
+                "id": ids,
+                "retmode": "xml"
+            }
+            fetch_response = requests.get(fetch_url, params=fetch_params, headers=headers, timeout=10)
+            soup = BeautifulSoup(fetch_response.text, "lxml")
+            articles_xml = soup.find_all("pubmedarticle")
+
+            articles_info = []
+            for article, pmid in zip(articles_xml, id_list):
+                title_tag = article.find("articletitle")
+                abstract_tag = article.find("abstract")
+                date_tag = article.find("pubdate")
+                author_tags = article.find_all("author")
+                journal_tag = article.find("journal")
+                keywords_tag = article.find_all("keyword")
+
+                # Title
+                title = title_tag.get_text(strip=True) if title_tag else "No title"
+
+                # Abstract
+                abstract = abstract_tag.get_text(separator=" ", strip=True) if abstract_tag else "No abstract available"
+
+                # Authors
+                authors = []
+                for author in author_tags:
+                    last = author.find("lastname")
+                    fore = author.find("forename")
+                    if last and fore:
+                        authors.append(f"{fore.get_text()} {last.get_text()}")
+                    elif last:
+                        authors.append(last.get_text())
+                authors = authors if authors else ["No authors listed"]
+
+                # Journal
+                journal_name = "Unknown Journal"
+                if journal_tag:
+                    journal_title = journal_tag.find("title")
+                    if journal_title:
+                        journal_name = journal_title.get_text(strip=True)
+
+                # Keywords
+                keywords = [kw.get_text(strip=True) for kw in keywords_tag] if keywords_tag else []
+
+                # Publication Date
+                pub_date = "No date"
+                if date_tag:
+                    year = date_tag.find("year")
+                    month = date_tag.find("month")
+                    day = date_tag.find("day")
+                    
+                    if year and month and day:
+                        pub_date = f"{month.get_text()} {day.get_text()}, {year.get_text()}"
+                    elif year and month:
+                        pub_date = f"{month.get_text()} {year.get_text()}"
+                    elif year:
+                        pub_date = year.get_text()
+
+                # PubMed Article URL
+                url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+
+                articles_info.append({
+                    "title": title,
+                    "abstract": abstract,
+                    "authors": authors,
+                    "publication_date": pub_date,
+                    "journal": journal_name,
+                    "keywords": keywords,
+                    "article_url": url,
+                    "pmid": pmid
+                })
+
+            return articles_info
+
+    except Exception as e:
+        st.error(f"Error during PubMed fetch: {e}")
+        if use_mock_if_empty:
+            st.warning("An error occurred. Showing simulated data.")
+            return generate_mock_data()
+        else:
             return []
 
-        logger.info(f"Found {total_count} articles. Retrieving up to {max_results}.")
-        ids = ",".join(id_list)
-
-        # Add delay to respect rate limits
-        time.sleep(0.5)
-
-        # Fetch article summaries
-        logger.info("Retrieving article details...")
-        fetch_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-        fetch_params = {
-            "db": "pubmed",
-            "id": ids,
-            "retmode": "xml"
-        }
-        if api_key:
-            fetch_params["api_key"] = api_key
-
-        fetch_response = requests.get(fetch_url, params=fetch_params, headers=headers, timeout=15)
-        fetch_response.raise_for_status()
-        soup = BeautifulSoup(fetch_response.text, "lxml")
-        articles_xml = soup.find_all("pubmedarticle")
-
-        articles_info = []
-        for article, pmid in zip(articles_xml, id_list):
-            title_tag = article.find("articletitle")
-            abstract_tag = article.find("abstract")
-            date_tag = article.find("pubdate")
-            author_tags = article.find_all("author")
-            journal_tag = article.find("journal")
-            keywords_tag = article.find_all("keyword")
-
-            # Title
-            title = title_tag.get_text(strip=True) if title_tag else "No title"
-
-            # Abstract
-            abstract = abstract_tag.get_text(separator=" ", strip=True) if abstract_tag else "No abstract available"
-
-            # Authors
-            authors = []
-            for author in author_tags:
-                last = author.find("lastname")
-                fore = author.find("forename")
-                collective = author.find("collectivename")
-                if collective:
-                    authors.append(collective.get_text())
-                elif last and fore:
-                    authors.append(f"{fore.get_text()} {last.get_text()}")
-                elif last:
-                    authors.append(last.get_text())
-                elif fore:
-                    authors.append(fore.get_text())
-            authors = authors if authors else ["No authors listed"]
-
-            # Journal
-            journal_name = "Unknown Journal"
-            if journal_tag:
-                journal_title = journal_tag.find("title")
-                if journal_title:
-                    journal_name = journal_title.get_text(strip=True)
-
-            # Keywords
-            keywords = [kw.get_text(strip=True) for kw in keywords_tag] if keywords_tag else []
-
-            # Publication Date
-            pub_date = "No date"
-            if date_tag:
-                year = date_tag.find("year")
-                month = date_tag.find("month")
-                day = date_tag.find("day")
-                date_parts = []
-                if year:
-                    date_parts.append(year.get_text())
-                if month:
-                    date_parts.insert(0, month.get_text())
-                if day:
-                    date_parts.insert(0, day.get_text())
-                pub_date = " ".join(date_parts) if date_parts else "No date"
-
-            # PubMed Article URL
-            url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
-
-            articles_info.append({
-                "title": title,
-                "abstract": abstract,
-                "authors": authors,
-                "publication_date": pub_date,
-                "journal": journal_name,
-                "keywords": keywords,
-                "article_url": url,
-                "pmid": pmid
-            })
-
-        return articles_info
-
-    except requests.RequestException as e:
-        logger.error(f"Network error during PubMed fetch: {e}")
-        return []
-    except (ValueError, KeyError) as e:
-        logger.error(f"Error parsing PubMed response: {e}")
-        return []
-    except Exception as e:
-        logger.error(f"Unexpected error during PubMed fetch: {e}")
-        return []
 def generate_mock_data():
     """Generate mock data for demonstration purposes."""
     current_year = datetime.now().year
     
     mock_articles = [
+        {
+            "title": "Recent Advances in Treatment Approaches for Autoimmune Disorders",
+            "abstract": "This comprehensive review examines the latest therapeutic approaches for autoimmune disorders, focusing on targeted immunomodulators and personalized medicine strategies. We analyze clinical trials data from the past five years and discuss emerging treatment paradigms.",
+            "authors": ["Sarah J. Wilson", "Michael Chang", "Priya Patel"],
+            "publication_date": f"January {current_year}",
+            "journal": "Journal of Clinical Immunology",
+            "keywords": ["autoimmune disorders", "immunomodulators", "personalized medicine"],
+            "article_url": "https://pubmed.ncbi.nlm.nih.gov/sample1/",
+            "pmid": "sample1"
+        },
         {
             "title": "Machine Learning Applications in Early Disease Detection",
             "abstract": "This study evaluates the efficacy of various machine learning algorithms in predicting disease onset from biomarker data. Using a dataset of 10,000 patients across multiple centers, we demonstrate significant improvements in early detection rates for several chronic conditions.",
@@ -455,6 +341,16 @@ def generate_mock_data():
             "pmid": "sample2"
         },
         {
+            "title": "Comparative Effectiveness of Novel Anticoagulants in Preventing Stroke",
+            "abstract": "This meta-analysis compares outcomes of direct oral anticoagulants versus traditional therapy in stroke prevention. Results indicate superior efficacy profiles for newer agents with reduced bleeding risks in specific patient populations.",
+            "authors": ["Jennifer M. Lopez", "Robert K. Chen", "Thomas Wilson"],
+            "publication_date": f"June {current_year-1}",
+            "journal": "Stroke Prevention Research",
+            "keywords": ["anticoagulants", "stroke prevention", "meta-analysis"],
+            "article_url": "https://pubmed.ncbi.nlm.nih.gov/sample3/",
+            "pmid": "sample3"
+        },
+        {
             "title": "Genetic Markers for Treatment Response in Major Depressive Disorder",
             "abstract": "This research identifies specific genetic polymorphisms associated with differential responses to antidepressant medications. The findings suggest potential for genotype-guided treatment selection to improve outcomes in depression management.",
             "authors": ["Natasha Singh", "Carlos Rodriguez"],
@@ -463,6 +359,16 @@ def generate_mock_data():
             "keywords": ["depression", "pharmacogenomics", "personalized psychiatry"],
             "article_url": "https://pubmed.ncbi.nlm.nih.gov/sample4/",
             "pmid": "sample4"
+        },
+        {
+            "title": "Microbiome Alterations Associated with Inflammatory Bowel Disease Progression",
+            "abstract": "This longitudinal study tracks changes in gut microbiota composition during inflammatory bowel disease progression. We identify specific bacterial signatures that precede clinical flares and may serve as early warning biomarkers.",
+            "authors": ["Ahmed Hassan", "Julia Chen", "Marcus Williams"],
+            "publication_date": f"April {current_year-1}",
+            "journal": "Gastroenterology Research",
+            "keywords": ["microbiome", "inflammatory bowel disease", "biomarkers"],
+            "article_url": "https://pubmed.ncbi.nlm.nih.gov/sample5/",
+            "pmid": "sample5"
         }
     ]
     
@@ -705,7 +611,7 @@ with st.sidebar:
 if search_button:
     keyword_list = [k.strip() for k in keywords.split(',') if k.strip()]
     year_range = [start_year, end_year] if start_year and end_year else None
-    query = build_pubmed_query(keyword_list, disease, logic_operator)
+    query = build_pubmed_query(keyword_list, disease, year_range, author, journal, logic_operator)
     
     if query:
         st.session_state.last_query = query
